@@ -1,5 +1,6 @@
 package com.v2ray.ang.ui
 
+import com.v2ray.ang.core.CoreServiceManager
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -235,6 +236,9 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(),
      * @param guid The server unique identifier to select
      */
     private fun setSelectServer(guid: String) {
+        // Manual selection disables Auto Failover.
+        CoreServiceManager.disableAutoFailover()
+
         val selected = MmkvManager.getSelectServer()
         if (guid != selected) {
             MmkvManager.setSelectServer(guid)

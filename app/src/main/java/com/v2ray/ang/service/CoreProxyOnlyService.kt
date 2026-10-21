@@ -41,6 +41,12 @@ class CoreProxyOnlyService : Service(), ServiceControl {
     override fun onDestroy() {
         super.onDestroy()
         CoreServiceManager.stopCoreLoop()
+
+        /*
+         * CoreServiceManager waits for the actual core stop before completing
+         * the service-stop Deferred.
+         */
+        CoreServiceManager.signalServiceStopComplete()
     }
 
     /**

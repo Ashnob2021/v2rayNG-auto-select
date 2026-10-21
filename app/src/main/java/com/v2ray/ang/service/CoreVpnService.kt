@@ -110,6 +110,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
 
         NotificationManager.cancelNotification()
+
+        /*
+         * Tell CoreServiceManager that the VPN service teardown has reached
+         * the end of its lifecycle. CoreServiceManager will additionally
+         * wait for the actual native core stop before releasing its
+         * service-stop completion.
+         */
+        CoreServiceManager.signalServiceStopComplete()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

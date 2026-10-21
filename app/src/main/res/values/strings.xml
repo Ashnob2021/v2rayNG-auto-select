@@ -321,6 +321,10 @@
     <string name="toast_invalid_update_interval">Invalid update interval. Minimum is 15 minutes.</string>
     <string name="title_sub_update">Update subscription</string>
     <string name="title_real_ping_all_server">Real delay config</string>
+    <string name="title_auto_select">Auto Select Fastest</string>
+    <string name="auto_select_testing">Finding the fastest server...</string>
+    <string name="auto_select_success">Connected to the fastest server: %1$d ms</string>
+    <string name="auto_select_no_valid_server">No working server found</string>
     <string name="title_user_asset_setting">Asset files</string>
     <string name="title_sort_by_test_results">Sorting by test results</string>
     <string name="title_filter_config">Filter config</string>

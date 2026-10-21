@@ -14,6 +14,7 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.dto.OutboundTrafficStat
+import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.toast
@@ -27,11 +28,13 @@ import com.v2ray.ang.service.CoreProxyOnlyService
 import com.v2ray.ang.service.CoreRootService
 import com.v2ray.ang.service.CoreVpnService
 import com.v2ray.ang.service.DialerNativeService
+import com.v2ray.ang.service.RealPingWorkerService
 import com.v2ray.ang.service.DialerWebviewService
 import com.v2ray.ang.service.IDialerService
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,32 +54,53 @@ object CoreServiceManager {
     private var currentConfig: ProfileItem? = null
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
+    var serviceControl: SoftReference<ServiceControl>? = null
     private const val TRAFFIC_STATS_INTERVAL_MS = 3000L
 
     private var trafficStatsJob: Job? = null
     private var latestTrafficStats: List<OutboundTrafficStat> = emptyList()
 
-    fun getLatestTrafficStats(): List<OutboundTrafficStat> {
-        return latestTrafficStats
-    }
+    // ------------------------------------------------------------
+    // Auto Failover
+    // ------------------------------------------------------------
 
-    var serviceControl: SoftReference<ServiceControl>? = null
-        set(value) {
-            field = value
-            val service = value?.get()?.getService()
-            CoreNativeManager.initCoreEnv(service)
-            if (service != null && processFinder == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                processFinder = XrayProcessFinder(service)
-                coreController.registerProcessFinder(processFinder)
-            }
-        }
+    private const val AUTO_FAILOVER_INTERVAL_MS = 15_000L
+    private const val AUTO_FAILOVER_FAILURE_THRESHOLD = 3
+    private const val AUTO_FAILOVER_DEGRADATION_THRESHOLD = 3
+
+    // Switch only when the candidate is meaningfully better.
+    private const val AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_MS = 30L
+    private const val AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_RATIO = 0.20
+
+    // Prevent rapid server hopping.
+    private const val AUTO_FAILOVER_COOLDOWN_MS = 60_000L
+
+    // Conservative severe-latency threshold.
+    private const val AUTO_FAILOVER_SEVERE_DELAY_MS = 1200L
+    private const val AUTO_FAILOVER_STOP_TIMEOUT_MS = 7_000L
+
+    private var autoFailoverJob: Job? = null
+    private var autoFailoverCheckRunning = false
+    private var autoFailoverSwitching = false
+
+    private var autoFailoverConsecutiveFailures = 0
+    private var autoFailoverConsecutiveBadDelays = 0
+    private var autoFailoverLastSwitchAt = 0L
 
     /**
-     * Starts the V2Ray service from a toggle action.
-     * @param context The context from which the service is started.
-     * @return True if the service was started successfully, false otherwise.
+     * Completes only after coreController.stopLoop() has actually returned.
      */
-    fun startVServiceFromToggle(context: Context): Boolean {
+    private var coreStopCompletion: CompletableDeferred<Unit>? = null
+
+    /**
+     * Completes after the Android service itself has finished its teardown.
+     *
+     * For VPN mode this is important because VpnService may still own the
+     * TUN interface even after the V2Ray core has stopped.
+     */
+    private var serviceStopCompletion: CompletableDeferred<Unit>? = null
+
+fun startVServiceFromToggle(context: Context): Boolean {
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             context.toast(R.string.app_tile_first_use)
             return false
@@ -97,17 +121,37 @@ object CoreServiceManager {
      * @param guid The GUID of the server configuration to use (optional).
      */
     fun startVService(context: Context, guid: String? = null) {
-        LogUtil.i(AppConfig.TAG, "StartCore-Manager: startVService from ${context::class.java.simpleName}")
 
-        if (guid != null) {
-            MmkvManager.setSelectServer(guid)
+        val startBlock: () -> Unit = {
+            LogUtil.i(
+                AppConfig.TAG,
+                "StartCore-Manager: startVService from " +
+                    "${context::class.java.simpleName}"
+            )
+
+            if (guid != null) {
+                MmkvManager.setSelectServer(guid)
+            }
+
+            try {
+                startContextService(context)
+            } catch (e: Exception) {
+
+                LogUtil.e(
+                    AppConfig.TAG,
+                    "StartCore-Manager: ${e.message}",
+                    e
+                )
+                context.toast(e.message ?: e.javaClass.simpleName)
+            }
         }
 
-        try {
-            startContextService(context)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: ${e.message}", e)
-            context.toast(e.message ?: e.javaClass.simpleName)
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            startBlock()
+        } else {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
+                startBlock()
+            }
         }
     }
 
@@ -116,6 +160,13 @@ object CoreServiceManager {
      * @param context The context from which the service is stopped.
      */
     fun stopVService(context: Context) {
+        /*
+         * Create the Deferred BEFORE sending the asynchronous broadcast.
+         * Otherwise Auto Failover could race with the Service and miss the
+         * beginning of the actual teardown.
+         */
+        prepareStopCompletions()
+
         //context.toast(R.string.toast_services_stop)
         MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
     }
@@ -124,6 +175,22 @@ object CoreServiceManager {
      * Checks if the V2Ray service is running.
      * @return True if the service is running, false otherwise.
      */
+    fun enableAutoFailover() {
+        MmkvManager.setAutoFailoverEnabled(true)
+        startAutoFailoverMonitor()
+    }
+
+    fun disableAutoFailover() {
+        MmkvManager.setAutoFailoverEnabled(false)
+        stopAutoFailoverMonitor()
+        autoFailoverConsecutiveFailures = 0
+        autoFailoverConsecutiveBadDelays = 0
+    }
+
+    fun getLatestTrafficStats(): List<OutboundTrafficStat> {
+        return latestTrafficStats
+    }
+
     fun isRunning() = coreController.isRunning
 
     /**
@@ -142,6 +209,7 @@ object CoreServiceManager {
      */
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
+
         if (coreController.isRunning) {
             LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return
@@ -175,7 +243,6 @@ object CoreServiceManager {
 
         if (config.insecure == true) {
             context.toastError(R.string.toast_allow_insecure_deprecated)
-            context.toastError(R.string.toast_allow_insecure_deprecated)
         }
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
@@ -201,16 +268,25 @@ object CoreServiceManager {
             Intent(context.applicationContext, CoreProxyOnlyService::class.java)
         }
 
+
         try {
             ContextCompat.startForegroundService(context, intent)
         } catch (e: SecurityException) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Missing permission to start foreground service", e)
+            LogUtil.e(
+                AppConfig.TAG,
+                "StartCore-Manager: Missing permission to start foreground service",
+                e
+            )
             throw IllegalStateException(e.message ?: e.javaClass.simpleName, e)
         } catch (e: RuntimeException) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 e.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException"
             ) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Foreground service start not allowed", e)
+                LogUtil.e(
+                    AppConfig.TAG,
+                    "StartCore-Manager: Foreground service start not allowed",
+                    e
+                )
                 throw IllegalStateException(e.message ?: e.javaClass.simpleName, e)
             }
             throw e
@@ -299,6 +375,10 @@ object CoreServiceManager {
 
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         NotificationManager.startSpeedNotification()
+
+        if (MmkvManager.isAutoFailoverEnabled()) {
+            startAutoFailoverMonitor()
+        }
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
     }
 
@@ -308,6 +388,12 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     private fun stopTrafficStatsCollector() {
+        // During an automatic switch, keep the failover coroutine alive
+        // long enough to wait for the old core to stop and start the new one.
+        if (!autoFailoverSwitching) {
+            stopAutoFailoverMonitor()
+        }
+
         trafficStatsJob?.cancel()
         trafficStatsJob = null
 
@@ -320,19 +406,103 @@ object CoreServiceManager {
         }
     }
 
+    /**
+     * Prepares completion signals BEFORE sending the asynchronous stop
+     * command. This removes the race where the stop broadcast could be
+     * processed before Auto Failover obtains the Deferred.
+     */
+    @Synchronized
+    fun prepareStopCompletions() {
+        if (coreStopCompletion == null || coreStopCompletion!!.isCompleted) {
+            coreStopCompletion = CompletableDeferred()
+        }
+
+        if (serviceStopCompletion == null || serviceStopCompletion!!.isCompleted) {
+            serviceStopCompletion = CompletableDeferred()
+        }
+    }
+
+    /**
+     * Returns the completion signal for the current core stop operation.
+     */
+    fun getCoreStopCompletion(): CompletableDeferred<Unit> {
+        return coreStopCompletion
+            ?: CompletableDeferred<Unit>().also { it.complete(Unit) }
+    }
+
+    /**
+     * Returns the completion signal for the current Android service teardown.
+     */
+    fun getServiceStopCompletion(): CompletableDeferred<Unit> {
+        return serviceStopCompletion
+            ?: CompletableDeferred<Unit>().also { it.complete(Unit) }
+    }
+
+    private fun beginCoreStop(): CompletableDeferred<Unit> {
+        val existing = coreStopCompletion
+
+        if (existing != null && !existing.isCompleted) {
+            return existing
+        }
+
+        return CompletableDeferred<Unit>().also {
+            coreStopCompletion = it
+        }
+    }
+
+    /**
+     * Called by the concrete Service after its own teardown has completed.
+     *
+     * We also wait for the actual core stop so this signal can never fire
+     * before the native core is fully stopped.
+     */
+    fun signalServiceStopComplete() {
+        val serviceCompletion = serviceStopCompletion ?: return
+        val coreCompletion = getCoreStopCompletion()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                coreCompletion.await()
+            } catch (_: Exception) {
+                // Still allow service-stop completion to be released.
+            }
+
+            serviceCompletion.complete(Unit)
+
+            LogUtil.i(
+                AppConfig.TAG,
+                "StartCore-Manager: Service teardown completed"
+            )
+        }
+    }
+
     fun stopCoreLoop(): Boolean {
         stopTrafficStatsCollector()
 
         val service = getService() ?: return false
+        val stopCompletion = beginCoreStop()
 
         if (coreController.isRunning) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     coreController.stopLoop()
                 } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
+                    LogUtil.e(
+                        AppConfig.TAG,
+                        "StartCore-Manager: Failed to stop V2Ray loop",
+                        e
+                    )
+                } finally {
+                    stopCompletion.complete(Unit)
+
+                    LogUtil.i(
+                        AppConfig.TAG,
+                        "StartCore-Manager: Core stop operation completed"
+                    )
                 }
             }
+        } else {
+            stopCompletion.complete(Unit)
         }
 
         // Close existing browser dialer
@@ -360,8 +530,7 @@ object CoreServiceManager {
      */
     fun queryAllOutboundTrafficStats(): List<OutboundTrafficStat> {
         val payload = coreController.queryAllOutboundTrafficStats()
-        LogUtil.i(AppConfig.TAG, "RAW TRAFFIC STATS: $payload")
-
+    
         val result = ArrayList<OutboundTrafficStat>()
 
         payload.split(';').forEach { entry ->
@@ -433,7 +602,403 @@ object CoreServiceManager {
      * Tests with primary URL first, then falls back to alternative URL if needed.
      * Also fetches remote IP information if the delay test was successful.
      */
-    private fun measureV2rayDelay() {
+    
+    /**
+     * Starts the service-level Auto Failover monitor.
+     *
+     * The Activity/ViewModel is not involved, so closing the UI does not
+     * stop monitoring while the core service remains alive.
+     */
+    private fun startAutoFailoverMonitor() {
+        if (!MmkvManager.isAutoFailoverEnabled()) {
+            return
+        }
+
+        if (autoFailoverJob?.isActive == true) {
+            return
+        }
+
+        autoFailoverJob = CoroutineScope(Dispatchers.IO).launch {
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: monitor started"
+            )
+
+            while (
+                isActive &&
+                coreController.isRunning &&
+                MmkvManager.isAutoFailoverEnabled()
+            ) {
+                try {
+                    performAutoFailoverHealthCheck()
+                } catch (e: Exception) {
+                    LogUtil.e(
+                        AppConfig.TAG,
+                        "AutoFailover: health check failed",
+                        e
+                    )
+                }
+
+                delay(AUTO_FAILOVER_INTERVAL_MS)
+            }
+
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: monitor stopped"
+            )
+        }
+    }
+
+    private fun stopAutoFailoverMonitor() {
+        autoFailoverJob?.cancel()
+        autoFailoverJob = null
+
+        autoFailoverCheckRunning = false
+        autoFailoverConsecutiveFailures = 0
+        autoFailoverConsecutiveBadDelays = 0
+    }
+
+    /**
+     * Measures the active connection through the running core.
+     */
+    private suspend fun measureCurrentConnection(): Long {
+        var time = -1L
+
+        try {
+            time = coreController.measureDelay(
+                SettingsManager.getDelayTestUrl()
+            )
+        } catch (e: Exception) {
+            LogUtil.d(
+                AppConfig.TAG,
+                "AutoFailover: primary health check failed: ${e.message}"
+            )
+        }
+
+        if (time < 0L) {
+            try {
+                time = coreController.measureDelay(
+                    SettingsManager.getDelayTestUrl(true)
+                )
+            } catch (e: Exception) {
+                LogUtil.d(
+                    AppConfig.TAG,
+                    "AutoFailover: fallback health check failed: ${e.message}"
+                )
+            }
+        }
+
+        return time
+    }
+
+    private suspend fun performAutoFailoverHealthCheck() {
+        if (
+            autoFailoverCheckRunning ||
+            autoFailoverSwitching ||
+            !coreController.isRunning ||
+            !MmkvManager.isAutoFailoverEnabled()
+        ) {
+            return
+        }
+
+        autoFailoverCheckRunning = true
+
+        try {
+            val now = System.currentTimeMillis()
+
+            if (
+                now - autoFailoverLastSwitchAt <
+                AUTO_FAILOVER_COOLDOWN_MS
+            ) {
+                return
+            }
+
+            val delay = measureCurrentConnection()
+
+            if (delay < 0L) {
+                autoFailoverConsecutiveFailures++
+                autoFailoverConsecutiveBadDelays = 0
+
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: connection failure " +
+                        "$autoFailoverConsecutiveFailures/" +
+                        "$AUTO_FAILOVER_FAILURE_THRESHOLD"
+                )
+
+                if (
+                    autoFailoverConsecutiveFailures >=
+                    AUTO_FAILOVER_FAILURE_THRESHOLD
+                ) {
+                    evaluateAutoFailoverCandidates()
+                }
+
+                return
+            }
+
+            autoFailoverConsecutiveFailures = 0
+
+            if (delay >= AUTO_FAILOVER_SEVERE_DELAY_MS) {
+                autoFailoverConsecutiveBadDelays++
+
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: severe latency ${delay}ms " +
+                        "($autoFailoverConsecutiveBadDelays/" +
+                        "$AUTO_FAILOVER_DEGRADATION_THRESHOLD)"
+                )
+
+                if (
+                    autoFailoverConsecutiveBadDelays >=
+                    AUTO_FAILOVER_DEGRADATION_THRESHOLD
+                ) {
+                    evaluateAutoFailoverCandidates()
+                }
+            } else {
+                autoFailoverConsecutiveBadDelays = 0
+            }
+        } finally {
+            autoFailoverCheckRunning = false
+        }
+    }
+
+    /**
+     * Tests all other configured servers with the application's existing
+     * RealPingWorkerService.
+     */
+    private suspend fun evaluateAutoFailoverCandidates() {
+        if (
+            autoFailoverSwitching ||
+            !MmkvManager.isAutoFailoverEnabled() ||
+            !coreController.isRunning
+        ) {
+            return
+        }
+
+        val currentGuid = MmkvManager.getSelectServer()
+            ?: return
+
+        val allGuids = MmkvManager
+            .decodeAllServerList()
+            .distinct()
+            .filter {
+                it.isNotBlank() && it != currentGuid
+            }
+
+        if (allGuids.isEmpty()) {
+            LogUtil.w(
+                AppConfig.TAG,
+                "AutoFailover: no alternative servers"
+            )
+            return
+        }
+
+        LogUtil.i(
+            AppConfig.TAG,
+            "AutoFailover: testing ${allGuids.size} alternatives"
+        )
+
+        MmkvManager.clearAllTestDelayResults(allGuids)
+
+        val bestResult = CompletableDeferred<Pair<String, Long>?>()
+
+        val context = getService()?.applicationContext
+        if (context == null) {
+            return
+        }
+
+        val worker = RealPingWorkerService(
+            context,
+            allGuids
+        ) { event ->
+            when (event) {
+                is RealPingEvent.Result -> {
+                    // RealPingWorkerService itself does not persist results.
+                    MmkvManager.encodeServerTestDelayMillis(
+                        event.guid,
+                        event.delayMillis
+                    )
+                }
+
+                is RealPingEvent.Finish -> {
+                    if (!bestResult.isCompleted) {
+                        val best = allGuids
+                            .mapNotNull { guid ->
+                                val delay =
+                                    MmkvManager
+                                        .decodeServerAffiliationInfo(guid)
+                                        ?.testDelayMillis
+                                        ?: 0L
+
+                                if (delay > 0L) {
+                                    guid to delay
+                                } else {
+                                    null
+                                }
+                            }
+                            .minByOrNull { it.second }
+
+                        bestResult.complete(best)
+                    }
+                }
+
+                is RealPingEvent.Progress -> {
+                    // No UI dependency.
+                }
+            }
+        }
+
+        try {
+            worker.start()
+
+            val result = bestResult.await()
+
+            if (result == null) {
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: no working candidate found"
+                )
+
+                autoFailoverConsecutiveFailures = 0
+                autoFailoverConsecutiveBadDelays = 0
+                return
+            }
+
+            val candidateGuid = result.first
+            val candidateDelay = result.second
+
+            // One fresh measurement of the current connection immediately
+            // before deciding whether a switch is actually justified.
+            val currentDelay = measureCurrentConnection()
+
+            if (currentDelay >= 0L) {
+                val absoluteBetter =
+                    currentDelay - candidateDelay >=
+                        AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_MS
+
+                val ratioBetter =
+                    candidateDelay <=
+                        currentDelay *
+                        (1.0 - AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_RATIO)
+
+                if (!absoluteBetter && !ratioBetter) {
+                    LogUtil.i(
+                        AppConfig.TAG,
+                        "AutoFailover: candidate not meaningfully better " +
+                            "(current=${currentDelay}ms, " +
+                            "candidate=${candidateDelay}ms)"
+                    )
+
+                    autoFailoverConsecutiveFailures = 0
+                    autoFailoverConsecutiveBadDelays = 0
+                    return
+                }
+            }
+
+            switchToAutoFailoverCandidate(
+                candidateGuid,
+                candidateDelay
+            )
+        } finally {
+            worker.cancel()
+        }
+    }
+
+    /**
+     * Performs the actual automatic switch.
+     *
+     * autoFailoverSwitching prevents stopCoreLoop() from cancelling the
+     * coroutine that is responsible for waiting for the old core and
+     * starting the new one.
+     */
+    private suspend fun switchToAutoFailoverCandidate(
+        candidateGuid: String,
+        candidateDelay: Long
+    ) {
+        if (
+            autoFailoverSwitching ||
+            !MmkvManager.isAutoFailoverEnabled()
+        ) {
+            return
+        }
+
+        if (candidateGuid == MmkvManager.getSelectServer()) {
+            return
+        }
+
+        val service = getService() ?: return
+        val context = service.applicationContext
+
+        autoFailoverSwitching = true
+
+        try {
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: switching to $candidateGuid " +
+                    "(${candidateDelay}ms)"
+            )
+
+            autoFailoverConsecutiveFailures = 0
+            autoFailoverConsecutiveBadDelays = 0
+            autoFailoverLastSwitchAt = System.currentTimeMillis()
+
+            /*
+             * Stop the old service and wait for BOTH:
+             *
+             * 1. The native core to finish stopping.
+             * 2. The Android service to finish its teardown.
+             *
+             * This is especially important in VPN mode, where the old
+             * VpnService may still own the TUN interface.
+             */
+            stopVService(context)
+
+            val coreStop = getCoreStopCompletion()
+            val serviceStop = getServiceStopCompletion()
+
+            try {
+                kotlinx.coroutines.withTimeout(
+                    AUTO_FAILOVER_STOP_TIMEOUT_MS
+                ) {
+                    coreStop.await()
+                    serviceStop.await()
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                LogUtil.e(
+                    AppConfig.TAG,
+                    "AutoFailover: timed out waiting for old service teardown",
+                    e
+                )
+                return
+            }
+
+            if (coreController.isRunning) {
+                LogUtil.e(
+                    AppConfig.TAG,
+                    "AutoFailover: current core is still running"
+                )
+                return
+            }
+
+            // Automatic selection must keep Auto Failover enabled.
+            MmkvManager.setSelectServer(candidateGuid)
+
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: starting candidate after confirmed teardown: " +
+                    candidateGuid
+            )
+
+            startVService(
+                context,
+                candidateGuid
+            )
+        } finally {
+            autoFailoverSwitching = false
+        }
+    }
+
+private fun measureV2rayDelay() {
         if (coreController.isRunning == false) {
             return
         }

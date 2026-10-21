@@ -71,6 +71,12 @@ class CoreRootService : Service(), ServiceControl {
         // to a dead listener. Synchronous on purpose — leaving rules behind breaks the net.
         RootProxyManager.stop(this)
         CoreServiceManager.stopCoreLoop()
+
+        /*
+         * CoreServiceManager waits for the actual core stop before completing
+         * the service-stop Deferred.
+         */
+        CoreServiceManager.signalServiceStopComplete()
     }
 
     override fun getService(): Service = this

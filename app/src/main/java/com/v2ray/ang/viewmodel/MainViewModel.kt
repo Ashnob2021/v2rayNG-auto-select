@@ -22,6 +22,7 @@ import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.matchesPattern
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.extension.toastSuccess
+import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
@@ -42,6 +43,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isRunning by lazy { MutableLiveData<Boolean>() }
     val updateListAction by lazy { MutableLiveData<Int>() }
     val updateTestResultAction by lazy { MutableLiveData<String>() }
+
+    private var autoSelectGuids: List<String> = emptyList()
+    private var autoSelectPending = false
 
     /**
      * Refer to the official documentation for [registerReceiver](https://developer.android.com/reference/androidx/core/content/ContextCompat#registerReceiver(android.content.Context,android.content.BroadcastReceiver,android.content.IntentFilter,int):
@@ -200,6 +204,126 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Tests the real ping for the current server.
      */
+    /**
+     * Test all currently visible servers and automatically select
+     * the fastest working server.
+     */
+    fun autoSelectFastest() {
+        MessageUtil.sendMsg2TestService(
+            getApplication(),
+            TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL)
+        )
+
+        val guids = serversCache.map { it.guid }.toList()
+
+        if (guids.isEmpty()) {
+            getApplication<AngApplication>().toastError(
+                R.string.auto_select_no_valid_server
+            )
+            return
+        }
+
+        autoSelectGuids = guids
+        autoSelectPending = true
+
+        MmkvManager.clearAllTestDelayResults(guids)
+        updateListAction.value = -1
+
+        viewModelScope.launch(Dispatchers.Default) {
+            MessageUtil.sendMsg2TestService(
+                getApplication(),
+                TestServiceMessage(
+                    key = AppConfig.MSG_MEASURE_CONFIG_START,
+                    subscriptionId = subscriptionId,
+                    serverGuids = guids
+                )
+            )
+        }
+    }
+
+    private fun finishAutoSelect() {
+        if (!autoSelectPending) {
+            return
+        }
+
+        autoSelectPending = false
+
+        val fastest = autoSelectGuids
+            .mapNotNull { guid ->
+                val delay = MmkvManager
+                    .decodeServerAffiliationInfo(guid)
+                    ?.testDelayMillis
+                    ?: 0L
+
+                if (delay > 0L) {
+                    guid to delay
+                } else {
+                    null
+                }
+            }
+            .minByOrNull { it.second }
+
+        autoSelectGuids = emptyList()
+
+        if (fastest == null) {
+            getApplication<AngApplication>().toastError(
+                R.string.auto_select_no_valid_server
+            )
+            return
+        }
+
+        val fastestGuid = fastest.first
+        val fastestDelay = fastest.second
+        val wasRunning = isRunning.value == true
+
+        MmkvManager.setSelectServer(fastestGuid)
+
+        viewModelScope.launch(Dispatchers.Main) {
+            reloadServerList()
+
+            if (wasRunning) {
+                CoreServiceManager.stopVService(getApplication())
+
+                val coreStop = CoreServiceManager.getCoreStopCompletion()
+                val serviceStop = CoreServiceManager.getServiceStopCompletion()
+
+                try {
+                    kotlinx.coroutines.withTimeout(5_000L) {
+                        coreStop.await()
+                        serviceStop.await()
+                    }
+                } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                    getApplication<AngApplication>().toastError(
+                        R.string.toast_services_failure
+                    )
+                    return@launch
+                }
+
+                if (CoreServiceManager.isRunning()) {
+                    getApplication<AngApplication>().toastError(
+                        R.string.toast_services_failure
+                    )
+                    return@launch
+                }
+            }
+
+            CoreServiceManager.startVService(
+                getApplication(),
+                fastestGuid
+            )
+
+            // Auto Select explicitly enables persistent Auto Failover.
+            CoreServiceManager.enableAutoFailover()
+
+            getApplication<AngApplication>().toastSuccess(
+                getApplication<AngApplication>().getString(
+                    R.string.auto_select_success,
+                    fastestDelay
+                )
+            )
+        }
+    }
+
     fun testCurrentServerRealPing() {
         MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_MEASURE_DELAY, "")
     }
@@ -404,6 +528,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onTestsFinished() {
+        if (autoSelectPending) {
+            finishAutoSelect()
+            return
+        }
+
         viewModelScope.launch(Dispatchers.Default) {
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_REMOVE_INVALID_AFTER_TEST)) {
                 removeInvalidServer()

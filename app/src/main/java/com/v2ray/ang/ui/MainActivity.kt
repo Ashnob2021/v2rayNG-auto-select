@@ -346,6 +346,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             true
         }
 
+        R.id.auto_select -> {
+            toast(R.string.auto_select_testing)
+            mainViewModel.autoSelectFastest()
+            true
+        }
+
         R.id.service_restart -> {
             restartV2Ray()
             true

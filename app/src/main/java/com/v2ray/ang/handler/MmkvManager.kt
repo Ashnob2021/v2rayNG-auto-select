@@ -99,6 +99,16 @@ object MmkvManager {
      *
      * @return The selected server GUID.
      */
+    private const val KEY_AUTO_FAILOVER_ENABLED = "AUTO_FAILOVER_ENABLED"
+
+    fun isAutoFailoverEnabled(): Boolean {
+        return mainStorage.decodeBool(KEY_AUTO_FAILOVER_ENABLED, false)
+    }
+
+    fun setAutoFailoverEnabled(enabled: Boolean) {
+        mainStorage.encode(KEY_AUTO_FAILOVER_ENABLED, enabled)
+    }
+
     fun getSelectServer(): String? {
         return mainStorage.decodeString(KEY_SELECTED_SERVER)
     }
