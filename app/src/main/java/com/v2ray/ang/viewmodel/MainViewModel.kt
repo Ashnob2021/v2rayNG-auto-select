@@ -278,6 +278,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         MmkvManager.setSelectServer(fastestGuid)
 
+        // Sort the current subscription by the fresh test results before
+        // the list is reloaded: fastest first, servers without a ping
+        // result at the end.
+        sortByTestResults()
+
         viewModelScope.launch(Dispatchers.Main) {
             reloadServerList()
 

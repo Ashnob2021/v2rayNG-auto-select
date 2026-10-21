@@ -55,6 +55,19 @@ object CoreServiceManager {
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
     var serviceControl: SoftReference<ServiceControl>? = null
+        set(value) {
+            field = value
+            val service = value?.get()?.getService()
+            // The core environment must be initialized when the main
+            // service binds, otherwise the core cannot locate the
+            // geodata files (geosite.dat / geoip.dat) and building the
+            // config fails. initCoreEnv is idempotent.
+            CoreNativeManager.initCoreEnv(service)
+            if (service != null && processFinder == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                processFinder = XrayProcessFinder(service)
+                coreController.registerProcessFinder(processFinder)
+            }
+        }
     private const val TRAFFIC_STATS_INTERVAL_MS = 3000L
 
     private var trafficStatsJob: Job? = null
