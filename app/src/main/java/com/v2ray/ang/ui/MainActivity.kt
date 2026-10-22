@@ -1,7 +1,11 @@
 package com.v2ray.ang.ui
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
@@ -222,36 +226,78 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     /**
      * Recreates the animated connect button of the newer upstream
      * version (upstream 2.3.x is Compose-based, so its code cannot be
-     * reused in this View-based codebase): on connect, the button spins
-     * two full turns over 3 seconds. The rotation is reset when the
-     * disconnected state is rendered.
+     * reused in this View-based codebase): on connect, only the button
+     * icon spins - two full turns over 3 seconds - while the button
+     * itself stays still, exactly like upstream.
      */
+    private var fabIcon: RotatingIconDrawable? = null
+    private var fabIconAnimator: ValueAnimator? = null
+
+    private fun setFabIcon(resId: Int) {
+        val base = ContextCompat.getDrawable(this, resId) ?: return
+        val wrapped = RotatingIconDrawable(base)
+        fabIcon = wrapped
+        binding.fab.setImageDrawable(wrapped)
+    }
+
     private fun spinConnectButton() {
-        binding.fab.animate().cancel()
-        binding.fab.rotation = 0f
-        binding.fab.animate()
-            .rotationBy(720f)
-            .setDuration(3000)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        val icon = fabIcon ?: return
+        fabIconAnimator?.cancel()
+        fabIconAnimator = ValueAnimator.ofFloat(0f, 720f).apply {
+            duration = 3000
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { icon.rotation = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    /** A drawable wrapper that draws its icon rotated by [rotation]. */
+    private class RotatingIconDrawable(private val icon: Drawable) : Drawable() {
+
+        var rotation: Float = 0f
+            set(value) {
+                field = value
+                invalidateSelf()
+            }
+
+        override fun draw(canvas: Canvas) {
+            icon.bounds = bounds
+            canvas.save()
+            canvas.rotate(rotation, bounds.exactCenterX(), bounds.exactCenterY())
+            icon.draw(canvas)
+            canvas.restore()
+        }
+
+        override fun setAlpha(alpha: Int) {
+            icon.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: ColorFilter?) {
+            icon.colorFilter = colorFilter
+        }
+
+        override fun getOpacity(): Int = icon.opacity
+
+        override fun getIntrinsicWidth(): Int = icon.intrinsicWidth
+
+        override fun getIntrinsicHeight(): Int = icon.intrinsicHeight
     }
 
     private fun applyRunningState(isLoading: Boolean, isRunning: Boolean) {
         if (isLoading) {
-            binding.fab.setImageResource(R.drawable.ic_fab_check)
+            setFabIcon(R.drawable.ic_fab_check)
             return
         }
 
         if (isRunning) {
-            binding.fab.setImageResource(R.drawable.ic_stop_24dp)
+            setFabIcon(R.drawable.ic_stop_24dp)
             binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_active))
             binding.fab.contentDescription = getString(R.string.action_stop_service)
             setTestState(getString(R.string.connection_connected))
             binding.layoutTest.isFocusable = true
         } else {
-            binding.fab.animate().cancel()
-            binding.fab.rotation = 0f
-            binding.fab.setImageResource(R.drawable.ic_play_24dp)
+            fabIconAnimator?.cancel()
+            setFabIcon(R.drawable.ic_play_24dp)
             binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
             binding.fab.contentDescription = getString(R.string.tasker_start_service)
             setTestState(getString(R.string.connection_not_connected))
