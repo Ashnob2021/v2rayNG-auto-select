@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.animation.DecelerateInterpolator
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -169,6 +170,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         if (mainViewModel.isRunning.value == true) {
             CoreServiceManager.stopVService(this)
         } else if (SettingsManager.isVpnMode()) {
+            spinConnectButton()
             val intent = VpnService.prepare(this)
             if (intent == null) {
                 startV2Ray()
@@ -176,6 +178,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 requestVpnPermission.launch(intent)
             }
         } else {
+            spinConnectButton()
             startV2Ray()
         }
     }
@@ -216,6 +219,23 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.tvTestState.text = content
     }
 
+    /**
+     * Recreates the animated connect button of the newer upstream
+     * version (upstream 2.3.x is Compose-based, so its code cannot be
+     * reused in this View-based codebase): on connect, the button spins
+     * two full turns over 3 seconds. The rotation is reset when the
+     * disconnected state is rendered.
+     */
+    private fun spinConnectButton() {
+        binding.fab.animate().cancel()
+        binding.fab.rotation = 0f
+        binding.fab.animate()
+            .rotationBy(720f)
+            .setDuration(3000)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
     private fun applyRunningState(isLoading: Boolean, isRunning: Boolean) {
         if (isLoading) {
             binding.fab.setImageResource(R.drawable.ic_fab_check)
@@ -229,6 +249,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             setTestState(getString(R.string.connection_connected))
             binding.layoutTest.isFocusable = true
         } else {
+            binding.fab.animate().cancel()
+            binding.fab.rotation = 0f
             binding.fab.setImageResource(R.drawable.ic_play_24dp)
             binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
             binding.fab.contentDescription = getString(R.string.tasker_start_service)
