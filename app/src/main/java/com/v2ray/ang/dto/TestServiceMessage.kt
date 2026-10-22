@@ -5,7 +5,6 @@ import java.io.Serializable
 data class TestServiceMessage(
     val key: Int,
     val subscriptionId: String = "",
-    val serverGuids: List<String> = emptyList(),
-    val autoSelect: Boolean = false
+    val serverGuids: List<String> = emptyList()
 ) : Serializable
 
