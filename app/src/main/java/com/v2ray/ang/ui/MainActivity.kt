@@ -238,7 +238,9 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun applyRunningState(isLoading: Boolean, isRunning: Boolean) {
         if (isLoading) {
-            binding.fab.setImageResource(R.drawable.ic_fab_check)
+            // Keep the current icon while the service state settles.
+            // (Stock code swapped in a check icon here, which read as a
+            // stray tick flash on the button.)
             return
         }
 
