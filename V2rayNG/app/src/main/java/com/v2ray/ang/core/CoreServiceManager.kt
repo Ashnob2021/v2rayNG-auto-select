@@ -16,6 +16,7 @@ import com.v2ray.ang.contracts.IDialerService
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.dto.ConnectionTestResult
 import com.v2ray.ang.dto.OutboundTrafficStat
+import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.BrowserDialerMode
 import com.v2ray.ang.extension.delay
@@ -28,6 +29,7 @@ import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.service.DialerNativeService
 import com.v2ray.ang.service.DialerWebviewService
 import com.v2ray.ang.service.NetworkMonitor
+import com.v2ray.ang.service.RealPingWorkerService
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +40,10 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -181,6 +187,10 @@ object CoreServiceManager {
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
         NotificationManager.startSpeedNotification()
+
+        if (MmkvManager.isAutoFailoverEnabled()) {
+            startAutoFailoverMonitor()
+        }
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
     }
 
@@ -196,6 +206,12 @@ object CoreServiceManager {
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
+
+        // During an automatic switch the core restarts in place (see
+        // switchToAutoFailoverCandidate), so keep the monitor alive then.
+        if (!autoFailoverSwitching) {
+            stopAutoFailoverMonitor()
+        }
 
         if (isRunning()) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -276,6 +292,426 @@ object CoreServiceManager {
             false
         } finally {
             isReloading = false
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Auto Failover (ported from the 2.2.6 custom fork)
+    //
+    // Service-level monitor: the UI is not involved, so closing the
+    // app does not stop monitoring while the core stays alive.
+    // A switch restarts the core loop in place (the same pattern as
+    // reloadCore): the service and the VPN interface stay up, only
+    // the selected server changes. The old fork's full service
+    // teardown wait is gone with it: this core no longer exposes
+    // stop-completion signals, and an in-place restart does not
+    // need them.
+    // ------------------------------------------------------------
+
+    private const val AUTO_FAILOVER_INTERVAL_MS = 15_000L
+    private const val AUTO_FAILOVER_FAILURE_THRESHOLD = 3
+    private const val AUTO_FAILOVER_DEGRADATION_THRESHOLD = 3
+
+    // Switch only when the candidate is meaningfully better.
+    private const val AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_MS = 30L
+    private const val AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_RATIO = 0.20
+
+    // Prevent rapid server hopping.
+    private const val AUTO_FAILOVER_COOLDOWN_MS = 60_000L
+
+    // Conservative severe-latency threshold.
+    private const val AUTO_FAILOVER_SEVERE_DELAY_MS = 1200L
+
+    private var autoFailoverJob: Job? = null
+    private var autoFailoverCheckRunning = false
+    private var autoFailoverSwitching = false
+
+    private var autoFailoverConsecutiveFailures = 0
+    private var autoFailoverConsecutiveBadDelays = 0
+    private var autoFailoverLastSwitchAt = 0L
+
+    fun enableAutoFailover() {
+        MmkvManager.setAutoFailoverEnabled(true)
+        startAutoFailoverMonitor()
+    }
+
+    fun disableAutoFailover() {
+        MmkvManager.setAutoFailoverEnabled(false)
+        stopAutoFailoverMonitor()
+        autoFailoverConsecutiveFailures = 0
+        autoFailoverConsecutiveBadDelays = 0
+    }
+
+    /**
+     * Starts the service-level Auto Failover monitor.
+     *
+     * The Activity/ViewModel is not involved, so closing the UI does not
+     * stop monitoring while the core service remains alive.
+     */
+    private fun startAutoFailoverMonitor() {
+        if (!MmkvManager.isAutoFailoverEnabled()) {
+            return
+        }
+
+        if (autoFailoverJob?.isActive == true) {
+            return
+        }
+
+        autoFailoverJob = CoroutineScope(Dispatchers.IO).launch {
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: monitor started"
+            )
+
+            while (
+                isActive &&
+                coreController.isRunning &&
+                MmkvManager.isAutoFailoverEnabled()
+            ) {
+                try {
+                    performAutoFailoverHealthCheck()
+                } catch (e: Exception) {
+                    LogUtil.e(
+                        AppConfig.TAG,
+                        "AutoFailover: health check failed",
+                        e
+                    )
+                }
+
+                delay(AUTO_FAILOVER_INTERVAL_MS)
+            }
+
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: monitor stopped"
+            )
+        }
+    }
+
+    private fun stopAutoFailoverMonitor() {
+        autoFailoverJob?.cancel()
+        autoFailoverJob = null
+
+        autoFailoverCheckRunning = false
+        autoFailoverConsecutiveFailures = 0
+        autoFailoverConsecutiveBadDelays = 0
+    }
+
+    /**
+     * Measures the active connection through the running core.
+     */
+    private suspend fun measureCurrentConnection(): Long {
+        var time = -1L
+
+        try {
+            time = coreController.measureDelay(
+                SettingsManager.getDelayTestUrl()
+            )
+        } catch (e: Exception) {
+            LogUtil.d(
+                AppConfig.TAG,
+                "AutoFailover: primary health check failed: ${e.message}"
+            )
+        }
+
+        if (time < 0L) {
+            try {
+                time = coreController.measureDelay(
+                    SettingsManager.getDelayTestUrl(true)
+                )
+            } catch (e: Exception) {
+                LogUtil.d(
+                    AppConfig.TAG,
+                    "AutoFailover: fallback health check failed: ${e.message}"
+                )
+            }
+        }
+
+        return time
+    }
+
+    private suspend fun performAutoFailoverHealthCheck() {
+        if (
+            autoFailoverCheckRunning ||
+            autoFailoverSwitching ||
+            !coreController.isRunning ||
+            !MmkvManager.isAutoFailoverEnabled()
+        ) {
+            return
+        }
+
+        autoFailoverCheckRunning = true
+
+        try {
+            val now = System.currentTimeMillis()
+
+            if (
+                now - autoFailoverLastSwitchAt <
+                AUTO_FAILOVER_COOLDOWN_MS
+            ) {
+                return
+            }
+
+            val delay = measureCurrentConnection()
+
+            if (delay < 0L) {
+                autoFailoverConsecutiveFailures++
+                autoFailoverConsecutiveBadDelays = 0
+
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: connection failure " +
+                        "$autoFailoverConsecutiveFailures/" +
+                        "$AUTO_FAILOVER_FAILURE_THRESHOLD"
+                )
+
+                if (
+                    autoFailoverConsecutiveFailures >=
+                    AUTO_FAILOVER_FAILURE_THRESHOLD
+                ) {
+                    evaluateAutoFailoverCandidates()
+                }
+
+                return
+            }
+
+            autoFailoverConsecutiveFailures = 0
+
+            if (delay >= AUTO_FAILOVER_SEVERE_DELAY_MS) {
+                autoFailoverConsecutiveBadDelays++
+
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: severe latency ${delay}ms " +
+                        "($autoFailoverConsecutiveBadDelays/" +
+                        "$AUTO_FAILOVER_DEGRADATION_THRESHOLD)"
+                )
+
+                if (
+                    autoFailoverConsecutiveBadDelays >=
+                    AUTO_FAILOVER_DEGRADATION_THRESHOLD
+                ) {
+                    evaluateAutoFailoverCandidates()
+                }
+            } else {
+                autoFailoverConsecutiveBadDelays = 0
+            }
+        } finally {
+            autoFailoverCheckRunning = false
+        }
+    }
+
+    /**
+     * Tests all other configured servers with the application's existing
+     * RealPingWorkerService.
+     */
+    private suspend fun evaluateAutoFailoverCandidates() {
+        if (
+            autoFailoverSwitching ||
+            !MmkvManager.isAutoFailoverEnabled() ||
+            !coreController.isRunning
+        ) {
+            return
+        }
+
+        val currentGuid = MmkvManager.getSelectServer()
+            ?: return
+
+        val allGuids = MmkvManager
+            .decodeAllServerList()
+            .distinct()
+            .filter {
+                it.isNotBlank() && it != currentGuid
+            }
+
+        if (allGuids.isEmpty()) {
+            LogUtil.w(
+                AppConfig.TAG,
+                "AutoFailover: no alternative servers"
+            )
+            return
+        }
+
+        LogUtil.i(
+            AppConfig.TAG,
+            "AutoFailover: testing ${allGuids.size} alternatives"
+        )
+
+        MmkvManager.clearAllTestDelayResults(allGuids)
+
+        val bestResult = CompletableDeferred<Pair<String, Long>?>()
+
+        val context = getService()?.applicationContext
+        if (context == null) {
+            return
+        }
+
+        val worker = RealPingWorkerService(
+            context,
+            allGuids
+        ) { event ->
+            when (event) {
+                is RealPingEvent.Result -> {
+                    // RealPingWorkerService itself does not persist results.
+                    MmkvManager.encodeServerTestDelayMillis(
+                        event.guid,
+                        event.delayMillis
+                    )
+                }
+
+                is RealPingEvent.Finish -> {
+                    if (!bestResult.isCompleted) {
+                        val best = allGuids
+                            .mapNotNull { guid ->
+                                val delay =
+                                    MmkvManager
+                                        .decodeServerAffiliationInfo(guid)
+                                        ?.testDelayMillis
+                                        ?: 0L
+
+                                if (delay > 0L) {
+                                    guid to delay
+                                } else {
+                                    null
+                                }
+                            }
+                            .minByOrNull { it.second }
+
+                        bestResult.complete(best)
+                    }
+                }
+
+                is RealPingEvent.Progress -> {
+                    // No UI dependency.
+                }
+            }
+        }
+
+        try {
+            worker.start()
+
+            val result = bestResult.await()
+
+            if (result == null) {
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "AutoFailover: no working candidate found"
+                )
+
+                autoFailoverConsecutiveFailures = 0
+                autoFailoverConsecutiveBadDelays = 0
+                return
+            }
+
+            val candidateGuid = result.first
+            val candidateDelay = result.second
+
+            // One fresh measurement of the current connection immediately
+            // before deciding whether a switch is actually justified.
+            val currentDelay = measureCurrentConnection()
+
+            if (currentDelay >= 0L) {
+                val absoluteBetter =
+                    currentDelay - candidateDelay >=
+                        AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_MS
+
+                val ratioBetter =
+                    candidateDelay <=
+                        currentDelay *
+                        (1.0 - AUTO_FAILOVER_MIN_DELAY_IMPROVEMENT_RATIO)
+
+                if (!absoluteBetter && !ratioBetter) {
+                    LogUtil.i(
+                        AppConfig.TAG,
+                        "AutoFailover: candidate not meaningfully better " +
+                            "(current=${currentDelay}ms, " +
+                            "candidate=${candidateDelay}ms)"
+                    )
+
+                    autoFailoverConsecutiveFailures = 0
+                    autoFailoverConsecutiveBadDelays = 0
+                    return
+                }
+            }
+
+            switchToAutoFailoverCandidate(
+                candidateGuid,
+                candidateDelay
+            )
+        } finally {
+            worker.cancel()
+        }
+    }
+
+    /**
+     * Performs the actual automatic switch.
+     *
+     * Unlike the old fork, this does not tear the whole service down:
+     * it restarts the core loop in place (the reloadCore pattern), so
+     * the service and the VPN interface stay up. If starting the
+     * candidate fails, the previous server is restored.
+     */
+    private suspend fun switchToAutoFailoverCandidate(
+        candidateGuid: String,
+        candidateDelay: Long
+    ) {
+        if (
+            autoFailoverSwitching ||
+            !MmkvManager.isAutoFailoverEnabled() ||
+            isReloading
+        ) {
+            return
+        }
+
+        if (candidateGuid == MmkvManager.getSelectServer()) {
+            return
+        }
+
+        val service = getService() ?: return
+        val previousGuid = MmkvManager.getSelectServer()
+
+        autoFailoverSwitching = true
+
+        try {
+            LogUtil.i(
+                AppConfig.TAG,
+                "AutoFailover: switching to $candidateGuid " +
+                    "(${candidateDelay}ms)"
+            )
+
+            autoFailoverConsecutiveFailures = 0
+            autoFailoverConsecutiveBadDelays = 0
+            autoFailoverLastSwitchAt = System.currentTimeMillis()
+
+            MmkvManager.setSelectServer(candidateGuid)
+
+            try {
+                coreController.stopLoop()
+                launchCore(service, currentVpnInterface, isReload = true)
+            } catch (e: Exception) {
+                LogUtil.e(
+                    AppConfig.TAG,
+                    "AutoFailover: failed to start candidate, restoring previous server",
+                    e
+                )
+                if (previousGuid != null) {
+                    MmkvManager.setSelectServer(previousGuid)
+                    try {
+                        if (coreController.isRunning) {
+                            coreController.stopLoop()
+                        }
+                        launchCore(service, currentVpnInterface, isReload = true)
+                    } catch (e2: Exception) {
+                        LogUtil.e(
+                            AppConfig.TAG,
+                            "AutoFailover: failed to restore previous server",
+                            e2
+                        )
+                    }
+                }
+            }
+        } finally {
+            autoFailoverSwitching = false
         }
     }
 

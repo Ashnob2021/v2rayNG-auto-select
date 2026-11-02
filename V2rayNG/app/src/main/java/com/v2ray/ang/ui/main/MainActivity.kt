@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
@@ -279,6 +280,8 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun setSelectServer(guid: String) {
         val selected = mainViewModel.uiState.value.selectedGuid
         if (guid != selected) {
+            // A manual selection opts out of Auto Failover, same as before.
+            CoreServiceManager.disableAutoFailover()
             mainViewModel.updateSelectedGuid(guid)
             LauncherManager.restartService(this)
         }

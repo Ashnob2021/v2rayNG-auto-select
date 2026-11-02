@@ -46,6 +46,7 @@ object MmkvManager {
     private const val ID_ASSET = "ASSET"
     private const val ID_SETTING = "SETTING"
     private const val KEY_SELECTED_SERVER = "SELECTED_SERVER"
+    private const val KEY_AUTO_FAILOVER_ENABLED = "AUTO_FAILOVER_ENABLED"
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
     private const val KEY_SUB_SERVER_PREFIX = "SUB_SERVERS_"
     private const val KEY_SUB_IDS = "SUB_IDS"
@@ -185,6 +186,18 @@ object MmkvManager {
         withProfileIndexLock {
             mainStorage.encode(KEY_SELECTED_SERVER, guid)
         }
+    }
+
+    /**
+     * Whether the service-level Auto Failover monitor is enabled.
+     * Set by Auto Select; cleared by any manual server selection.
+     */
+    fun isAutoFailoverEnabled(): Boolean {
+        return mainStorage.decodeBool(KEY_AUTO_FAILOVER_ENABLED, false)
+    }
+
+    fun setAutoFailoverEnabled(enabled: Boolean) {
+        mainStorage.encode(KEY_AUTO_FAILOVER_ENABLED, enabled)
     }
 
     /**
