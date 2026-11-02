@@ -99,7 +99,8 @@ fun MainBottomBar(
                 .align(Alignment.TopEnd)
                 .padding(end = 24.dp)
                 .offset(y = (-28).dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .graphicsLayer { rotationZ = rotationAnim.value },
             containerColor = if (isRunning) colorFabActive
             else if (isDarkTheme) colorFabInactiveDark
             else colorFabInactiveLight
@@ -113,7 +114,6 @@ fun MainBottomBar(
                 tint = Color.White,
                 modifier = Modifier
                     .size(24.dp)
-                    .graphicsLayer { rotationZ = rotationAnim.value }
             )
         }
     }
