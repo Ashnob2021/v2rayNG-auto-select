@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.dto.ConnectionTestResult
 import com.v2ray.ang.dto.GroupMapItem
 import com.v2ray.ang.dto.LocateTarget
@@ -110,6 +112,10 @@ class MainViewModel(
     private val testRequests = MainTestRequests()
     private var bulkTestJob: Job? = null
 
+    // ---------- Auto Select ----------
+    private var autoSelectPending = false
+    private var autoSelectGuids = emptyList<String>()
+
     private val initialPageReady = CompletableDeferred<Unit>()
 
     // ---------- Service events ----------
@@ -180,6 +186,8 @@ class MainViewModel(
                 if (testRequests.completeBulk(event.requestId) != null) {
                     cancelPendingTestResults()
                     resetTestStatus()
+                    autoSelectPending = false
+                    autoSelectGuids = emptyList()
                 }
             }
         }
@@ -279,6 +287,7 @@ class MainViewModel(
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
             MainAction.TestAllServers -> testAllRealPing(true)
             MainAction.TestRealAllServers -> testAllRealPing()
+            MainAction.AutoSelectFastest -> autoSelectFastest()
             MainAction.CancelTesting -> cancelAllPing()
             MainAction.RemoveAllServers -> removeAllServerAsync()
             MainAction.RemoveDuplicateServers -> removeDuplicateServerAsync()
@@ -823,6 +832,8 @@ class MainViewModel(
         cancelPendingTestResults()
         resetTestStatus()
         dataSource.cancelAllPing()
+        autoSelectPending = false
+        autoSelectGuids = emptyList()
     }
 
     private fun resetTestStatus() {
@@ -885,6 +896,57 @@ class MainViewModel(
         }
     }
 
+    /**
+     * Tests all servers of the current group and connects to the fastest
+     * one, then enables persistent Auto Failover. Ported from the 2.2.6
+     * fork: the batch ping reuses testAllRealPing, and finishAutoSelect
+     * runs from onTestsFinished when the test service reports completion.
+     */
+    fun autoSelectFastest() {
+        val servers = currentServers()
+        if (servers.isEmpty()) {
+            toastError(R.string.auto_select_no_valid_server)
+            return
+        }
+        toast(R.string.auto_select_testing)
+        testAllRealPing()
+        autoSelectGuids = servers.map { it.guid }
+        autoSelectPending = true
+    }
+
+    private fun finishAutoSelect() {
+        if (!autoSelectPending) return
+        autoSelectPending = false
+        val guids = autoSelectGuids
+        autoSelectGuids = emptyList()
+        val fastest = guids.mapNotNull { guid ->
+            val delay = dataSource.decodeAffiliationInfo(guid)?.testDelayMillis ?: 0L
+            if (delay > 0L) guid to delay else null
+        }.minByOrNull { it.second }
+        if (fastest == null) {
+            toastError(R.string.auto_select_no_valid_server)
+            return
+        }
+        val (fastestGuid, fastestDelay) = fastest
+        val wasRunning = uiState.value.isRunning
+        updateSelectedGuid(fastestGuid)
+        viewModelScope.launch(ioDispatcher) {
+            sortByTestResultsInternal()
+            cacheMutex.withLock { groupDataCache.clear() }
+            setupGroupTab(forceRefresh = true)
+            withContext(Dispatchers.Main) {
+                if (wasRunning) {
+                    LauncherManager.restartService(getApplication())
+                } else {
+                    LauncherManager.startService(getApplication(), fastestGuid)
+                }
+                // Auto Select explicitly enables persistent Auto Failover.
+                CoreServiceManager.enableAutoFailover()
+                toast(dataSource.getString(R.string.auto_select_success, fastestDelay))
+            }
+        }
+    }
+
     private fun cancelPendingTestResults() {
         testResultFlushJob?.cancel()
         testResultFlushJob = null
@@ -901,6 +963,10 @@ class MainViewModel(
     private fun onTestsFinished(requestId: String) {
         if (testRequests.completeBulk(requestId) == null) return
         resetTestStatus()
+        if (autoSelectPending) {
+            finishAutoSelect()
+            return
+        }
         viewModelScope.launch(ioDispatcher) {
             cacheMutex.withLock { groupDataCache.clear() }
             reloadAllGroups(_uiState.value.groups.map { it.id })
