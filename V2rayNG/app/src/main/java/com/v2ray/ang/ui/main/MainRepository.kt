@@ -180,6 +180,9 @@ class MainRepository(
     override fun clearAllTestDelayResults(guids: List<String>) =
         MmkvManager.clearAllTestDelayResults(guids)
 
+    override fun getTrafficUpload(guid: String): Long? = MmkvManager.getTrafficUpload(guid)
+    override fun getTrafficDownload(guid: String): Long? = MmkvManager.getTrafficDownload(guid)
+    override fun clearAllTrafficStats() = MmkvManager.clearAllTrafficStats()
     override fun sortByTestResultsForSub(subId: String) {
         AngConfigManager.sortByTestResultsForSub(subId)
     }

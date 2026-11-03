@@ -45,6 +45,7 @@ object MmkvManager {
     private const val ID_SUB = "SUB"
     private const val ID_ASSET = "ASSET"
     private const val ID_SETTING = "SETTING"
+    private const val ID_TRAFFIC_STATS = "TRAFFIC_STATS"
     private const val KEY_SELECTED_SERVER = "SELECTED_SERVER"
     private const val KEY_AUTO_FAILOVER_ENABLED = "AUTO_FAILOVER_ENABLED"
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
@@ -77,6 +78,9 @@ object MmkvManager {
     private val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
     private val assetStorage by lazy { MMKV.mmkvWithID(ID_ASSET, MMKV.MULTI_PROCESS_MODE) }
     private val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
+    private val trafficStatsStorage by lazy {
+        MMKV.mmkvWithID(ID_TRAFFIC_STATS, MMKV.MULTI_PROCESS_MODE)
+    }
 
     private inline fun <T> withProfileIndexLock(block: () -> T): T {
         return synchronized(mainStorage) {
@@ -422,6 +426,43 @@ object MmkvManager {
         }
         profileFullStorage.remove(guid)
         serverAffStorage.remove(guid)
+        removeTrafficStats(guid)
+    }
+
+    fun addTrafficStats(guid: String, upload: Long, download: Long) {
+        val currentUpload = trafficStatsStorage.decodeLong("${guid}_UP", 0L)
+        val currentDownload = trafficStatsStorage.decodeLong("${guid}_DOWN", 0L)
+
+        trafficStatsStorage.encode(
+            "${guid}_UP",
+            currentUpload + upload
+        )
+
+        trafficStatsStorage.encode(
+            "${guid}_DOWN",
+            currentDownload + download
+        )
+    }
+
+    fun getTrafficUpload(guid: String): Long? {
+        val key = "${guid}_UP"
+        if (!trafficStatsStorage.containsKey(key)) return null
+        return trafficStatsStorage.decodeLong(key, 0L)
+    }
+
+    fun getTrafficDownload(guid: String): Long? {
+        val key = "${guid}_DOWN"
+        if (!trafficStatsStorage.containsKey(key)) return null
+        return trafficStatsStorage.decodeLong(key, 0L)
+    }
+
+    fun clearAllTrafficStats() {
+        trafficStatsStorage.clearAll()
+    }
+
+    fun removeTrafficStats(guid: String) {
+        trafficStatsStorage.removeValueForKey("${guid}_UP")
+        trafficStatsStorage.removeValueForKey("${guid}_DOWN")
     }
 
     /**

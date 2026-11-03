@@ -190,6 +190,7 @@ object CoreServiceManager {
         if (MmkvManager.isAutoFailoverEnabled()) {
             startAutoFailoverMonitor()
         }
+        startTrafficStatsCollector()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
     }
 
@@ -199,6 +200,7 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        stopTrafficStatsCollector()
         connectionTestScope.coroutineContext.cancelChildren()
         val service = getService() ?: return false
 
@@ -329,6 +331,16 @@ object CoreServiceManager {
     private var autoFailoverConsecutiveBadDelays = 0
     private var autoFailoverLastSwitchAt = 0L
 
+    // ---------- Per-server cumulative traffic (ported from the 2.2.6 fork) ----------
+    private const val TRAFFIC_STATS_INTERVAL_MS = 3000L
+    private var trafficStatsJob: Job? = null
+
+    @Volatile
+    private var latestTrafficStats: List<OutboundTrafficStat> = emptyList()
+
+    @Volatile
+    private var latestTrafficStatsQueryTime: Long = 0L
+
     fun enableAutoFailover() {
         MmkvManager.setAutoFailoverEnabled(true)
         startAutoFailoverMonitor()
@@ -339,6 +351,64 @@ object CoreServiceManager {
         stopAutoFailoverMonitor()
         autoFailoverConsecutiveFailures = 0
         autoFailoverConsecutiveBadDelays = 0
+    }
+
+    fun getLatestTrafficStats(): List<OutboundTrafficStat> {
+        return latestTrafficStats
+    }
+
+    fun getLatestTrafficStatsQueryTime(): Long {
+        return latestTrafficStatsQueryTime
+    }
+
+    private fun startTrafficStatsCollector() {
+        if (trafficStatsJob?.isActive == true) return
+
+        trafficStatsJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive && coreController.isRunning) {
+                try {
+                    collectTrafficStats()
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "Traffic stats collection failed", e)
+                }
+
+                delay(TRAFFIC_STATS_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopTrafficStatsCollector() {
+        trafficStatsJob?.cancel()
+        trafficStatsJob = null
+    }
+
+    private fun collectTrafficStats() {
+        val guid = MmkvManager.getSelectServer() ?: return
+
+        val stats = queryAllOutboundTrafficStats()
+
+        var upload = 0L
+        var download = 0L
+
+        stats.forEach { stat ->
+            when {
+                stat.tag == AppConfig.TAG_DIRECT ||
+                    stat.tag.startsWith(AppConfig.TAG_PROXY) -> {
+
+                    when (stat.direction) {
+                        AppConfig.UPLINK -> upload += stat.value
+                        AppConfig.DOWNLINK -> download += stat.value
+                    }
+                }
+            }
+        }
+
+        if (upload > 0L || download > 0L) {
+            MmkvManager.addTrafficStats(guid, upload, download)
+        }
+
+        latestTrafficStats = stats
+        latestTrafficStatsQueryTime = System.currentTimeMillis()
     }
 
     /**

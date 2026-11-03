@@ -45,6 +45,7 @@ sealed interface MainAction {
     data object RemoveDuplicateServers : MainAction
     data object RemoveInvalidServers : MainAction
     data object SortByTestResults : MainAction
+    data object ClearTrafficStats : MainAction
     data object UpdateSubscriptions : MainAction
     data class UpdateGroupSubscription(val groupId: String) : MainAction
     data object ExportAll : MainAction

@@ -111,6 +111,7 @@ class MainViewModel(
 
     private val testRequests = MainTestRequests()
     private var bulkTestJob: Job? = null
+    private var trafficRefreshJob: Job? = null
 
     // ---------- Auto Select ----------
     private var autoSelectPending = false
@@ -299,6 +300,7 @@ class MainViewModel(
             MainAction.RemoveDuplicateServers -> removeDuplicateServerAsync()
             MainAction.RemoveInvalidServers -> removeInvalidServerAsync()
             MainAction.SortByTestResults -> sortByTestResultsAsync()
+            MainAction.ClearTrafficStats -> clearTrafficStats()
             MainAction.UpdateSubscriptions -> importConfigViaSub(uiState.value.selectedGroupId)
             is MainAction.UpdateGroupSubscription -> importConfigViaSub(action.groupId)
             MainAction.ExportAll -> exportAllAsync()
@@ -428,7 +430,9 @@ class MainViewModel(
         return servers.map { server ->
             buildServerRowUiModel(
                 server = server,
-                subscriptionRemarks = subscriptionRemarks[server.profile.subscriptionId].orEmpty()
+                subscriptionRemarks = subscriptionRemarks[server.profile.subscriptionId].orEmpty(),
+                trafficUpload = dataSource.getTrafficUpload(server.guid),
+                trafficDownload = dataSource.getTrafficDownload(server.guid)
             )
         }
     }
@@ -1010,6 +1014,52 @@ class MainViewModel(
                 status = if (!clearTestingText && state.isRunning == running) state.status
                 else if (running) MainStatus.Connected else MainStatus.Disconnected
             )
+        }
+        if (running) {
+            refreshTrafficRows()
+            startTrafficRefresh()
+        } else {
+            stopTrafficRefresh()
+        }
+    }
+
+    private fun startTrafficRefresh() {
+        if (trafficRefreshJob?.isActive == true) return
+        trafficRefreshJob = viewModelScope.launch {
+            while (true) {
+                delay(3000L)
+                refreshTrafficRows()
+            }
+        }
+    }
+
+    private fun stopTrafficRefresh() {
+        trafficRefreshJob?.cancel()
+        trafficRefreshJob = null
+    }
+
+    private fun refreshTrafficRows() {
+        groupUiFlows.forEach { (_, flow) ->
+            flow.update { current ->
+                current.copy(
+                    rows = current.rows.map { row ->
+                        row.copy(
+                            trafficUpload = dataSource.getTrafficUpload(row.guid),
+                            trafficDownload = dataSource.getTrafficDownload(row.guid)
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    private fun clearTrafficStats() {
+        viewModelScope.launch(ioDispatcher) {
+            dataSource.clearAllTrafficStats()
+            withContext(Dispatchers.Main) {
+                refreshTrafficRows()
+                toast(R.string.title_clear_traffic_stats)
+            }
         }
     }
 

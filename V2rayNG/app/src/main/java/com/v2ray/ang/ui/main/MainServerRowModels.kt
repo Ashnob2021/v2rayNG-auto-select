@@ -4,6 +4,7 @@ import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.nullIfBlank
+import com.v2ray.ang.extension.toTrafficString
 import com.v2ray.ang.handler.AngConfigManager
 
 internal data class ServerRowUiModel(
@@ -14,7 +15,16 @@ internal data class ServerRowUiModel(
     val typeDescription: String,
     val testDelayMillis: Long,
     val subscriptionBadge: String,
-)
+    val trafficUpload: Long? = null,
+    val trafficDownload: Long? = null,
+) {
+    val trafficText: String?
+        get() = if (trafficUpload != null || trafficDownload != null) {
+            "↑ ${(trafficUpload ?: 0L).toTrafficString()}  ↓ ${(trafficDownload ?: 0L).toTrafficString()}"
+        } else {
+            null
+        }
+}
 
 internal data class ServerGroupUiState(
     val servers: List<ServersCache> = emptyList(),
@@ -24,6 +34,8 @@ internal data class ServerGroupUiState(
 internal fun buildServerRowUiModel(
     server: ServersCache,
     subscriptionRemarks: String,
+    trafficUpload: Long? = null,
+    trafficDownload: Long? = null,
 ): ServerRowUiModel {
     val profile = server.profile
     return ServerRowUiModel(
@@ -35,6 +47,8 @@ internal fun buildServerRowUiModel(
         typeDescription = serverProtocolDescription(profile),
         testDelayMillis = server.testDelayMillis,
         subscriptionBadge = subscriptionRemarks.firstOrNull()?.toString().orEmpty(),
+        trafficUpload = trafficUpload,
+        trafficDownload = trafficDownload,
     )
 }
 

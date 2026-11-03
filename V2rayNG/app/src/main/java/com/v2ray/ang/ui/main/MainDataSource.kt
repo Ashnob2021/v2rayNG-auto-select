@@ -40,6 +40,9 @@ interface MainDataSource : Closeable {
     fun removeInvalidServersInGroup(groupId: String): Int
 
     fun clearAllTestDelayResults(guids: List<String>)
+    fun getTrafficUpload(guid: String): Long?
+    fun getTrafficDownload(guid: String): Long?
+    fun clearAllTrafficStats()
     fun sortByTestResultsForSub(subId: String)
     fun getSubsList(): List<String>
 

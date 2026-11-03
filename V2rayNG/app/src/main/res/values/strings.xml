@@ -349,6 +349,7 @@
     <string name="title_real_ping_all_server">Test real delays</string>
     <string name="title_user_asset_setting">Asset files</string>
     <string name="title_sort_by_test_results">Sort by test results</string>
+    <string name="title_clear_traffic_stats">Clear traffic statistics</string>
     <string name="title_auto_select">Auto Select Fastest</string>
     <string name="auto_select_testing">Finding the fastest server...</string>
     <string name="auto_select_success">Connected to the fastest server: %1$d ms</string>

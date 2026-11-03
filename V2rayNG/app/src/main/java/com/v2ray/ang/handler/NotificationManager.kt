@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.dto.OutboundTrafficStat
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.extension.delay
 import com.v2ray.ang.extension.toSpeedString
@@ -35,6 +36,8 @@ object NotificationManager {
     private const val QUERY_INTERVAL_MS = 3000L
 
     private var lastQueryTime = 0L
+    private var lastSpeedStats: List<OutboundTrafficStat>? = null
+    private var lastSpeedStatsTime: Long = 0L
     private var mBuilder: NotificationCompat.Builder? = null
     private var speedNotificationJob: Job? = null
     private var mNotificationManager: NotificationManager? = null
@@ -47,6 +50,8 @@ object NotificationManager {
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) return
         if (speedNotificationJob != null || CoreServiceManager.isRunning() == false) return
 
+        lastSpeedStats = null
+        lastSpeedStatsTime = 0L
         var lastZeroSpeed = false
 
         speedNotificationJob = CoroutineScope(Dispatchers.IO).launch {
@@ -146,6 +151,8 @@ object NotificationManager {
         speedNotificationJob?.let {
             it.cancel()
             speedNotificationJob = null
+            lastSpeedStats = null
+            lastSpeedStatsTime = 0L
             updateNotification("", 0, 0)
         }
     }
@@ -223,7 +230,7 @@ object NotificationManager {
 
     /**
      * Updates the speed notification once.
-     * Queries traffic stats, separates proxy and direct, and updates the notification.
+     * Consumes the traffic collector's latest snapshot, separates proxy and direct, and updates the notification.
      * @param lastZeroSpeed The previous zero speed state.
      * @return The current zero speed state.
      */
@@ -237,14 +244,29 @@ object NotificationManager {
             lastQueryTime = queryTime
             return lastZeroSpeed
         }
-        val sinceLastQueryInSeconds = sinceLastQueryIn / 1000.0
+        // The traffic collector in CoreServiceManager is the single querier
+        // of the resetting core counters; the speed display consumes its
+        // snapshots, so totals and speeds never split a delta between them.
+        val stats = CoreServiceManager.getLatestTrafficStats()
+        if (stats === lastSpeedStats) {
+            return lastZeroSpeed
+        }
+        val snapshotTime = CoreServiceManager.getLatestTrafficStatsQueryTime()
+        val elapsedSeconds = (snapshotTime - lastSpeedStatsTime) / 1000.0
+        if (lastSpeedStatsTime == 0L || elapsedSeconds <= 0.0) {
+            lastSpeedStats = stats
+            lastSpeedStatsTime = snapshotTime
+            lastQueryTime = queryTime
+            return lastZeroSpeed
+        }
+        val sinceLastQueryInSeconds = elapsedSeconds
 
         var proxyUplink = 0L
         var proxyDownlink = 0L
         var directUplink = 0L
         var directDownlink = 0L
 
-        CoreServiceManager.queryAllOutboundTrafficStats().forEach { stat ->
+        stats.forEach { stat ->
             when {
                 stat.tag == AppConfig.TAG_DIRECT -> {
                     when (stat.direction) {
@@ -281,6 +303,8 @@ object NotificationManager {
             )
             updateNotification(text.toString(), proxyTotal, directTotal)
         }
+        lastSpeedStats = stats
+        lastSpeedStatsTime = snapshotTime
         lastQueryTime = queryTime
         return zeroSpeed
     }

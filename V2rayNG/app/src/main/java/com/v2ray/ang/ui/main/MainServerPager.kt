@@ -444,6 +444,16 @@ private fun ServerListItem(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
+            row.trafficText?.let { trafficText ->
+                Text(
+                    trafficText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
                     row.typeDescription,
