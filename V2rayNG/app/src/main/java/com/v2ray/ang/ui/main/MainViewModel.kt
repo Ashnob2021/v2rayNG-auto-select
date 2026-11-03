@@ -134,7 +134,13 @@ class MainViewModel(
 
     private fun handleServiceEvent(event: MainServiceEvent) {
         when (event) {
-            MainServiceEvent.StateRunning -> updateRunningState(true, clearTestingText = false)
+            MainServiceEvent.StateRunning -> {
+                updateRunningState(true, clearTestingText = false)
+                // The selected server can change service-side (Auto Failover
+                // switch): re-read it so the list checkmark follows the
+                // actually-connected server.
+                refreshSelectedGuid()
+            }
             MainServiceEvent.StateNotRunning -> updateRunningState(false, clearTestingText = false)
             MainServiceEvent.StateStartSuccess -> {
                 toastSuccess(R.string.toast_services_success)

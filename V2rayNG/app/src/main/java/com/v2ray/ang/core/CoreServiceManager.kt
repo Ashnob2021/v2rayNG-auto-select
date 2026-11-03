@@ -709,6 +709,9 @@ object CoreServiceManager {
                     }
                 }
             }
+            // Tell the UI the selected server may have changed, so the
+            // list checkmark follows the actually-connected server.
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_RUNNING, "")
         } finally {
             autoFailoverSwitching = false
         }
