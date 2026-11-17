@@ -24,6 +24,9 @@ data class MainUiState(
     val isTesting: Boolean = false,
     val status: MainStatus = MainStatus.Disconnected,
     val locateTarget: LocateTarget? = null,
+    // Increments each time sorting by test results finishes; the main screen
+    // scrolls the visible list to the top on every change.
+    val scrollToTopRequest: Int = 0,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
     val shareQRCodeBitmap: android.graphics.Bitmap? = null

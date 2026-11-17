@@ -105,6 +105,18 @@ fun MainScreen(
     // Height of the floating connection bar, so the server lists can scroll clear of it.
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
 
+    // After sorting by test results, jump the visible list back to the top.
+    val scrollToTopRequest = uiState.scrollToTopRequest
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest == 0) return@LaunchedEffect
+        val groupId = latestGroups.getOrNull(pagerState.currentPage)?.id ?: return@LaunchedEffect
+        if (doubleColumnDisplay) {
+            lazyGridStates[groupId]?.scrollToItem(0)
+        } else {
+            lazyListStates[groupId]?.scrollToItem(0)
+        }
+    }
+
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()

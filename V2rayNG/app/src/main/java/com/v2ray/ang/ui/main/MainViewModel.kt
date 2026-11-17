@@ -718,6 +718,9 @@ class MainViewModel(
                     sortByTestResultsInternal()
                     cacheMutex.withLock { groupDataCache.clear() }
                     setupGroupTab(forceRefresh = true)
+                    // The group reload runs asynchronously; scrolling to the top now
+                    // holds, because the list state keeps its position across the refresh.
+                    _uiState.update { it.copy(scrollToTopRequest = it.scrollToTopRequest + 1) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
