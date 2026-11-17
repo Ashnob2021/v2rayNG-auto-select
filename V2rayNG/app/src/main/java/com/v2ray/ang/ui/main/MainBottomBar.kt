@@ -64,8 +64,6 @@ private const val TEXT_LINE_HEIGHT_FACTOR = 1.3f
  * alike, and never moves, so the bar can be used with one hand. The message is start-aligned (left
  * in LTR, right in RTL, next to the button). Tapping the track tests the current server. On wide
  * screens the bar is capped at [BAR_MAX_WIDTH] and centered.
- *
- * The whole round button spins while connecting, as in our fork; PattNG spins only the icon.
  */
 @Composable
 fun MainBottomBar(
@@ -168,9 +166,7 @@ fun MainBottomBar(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = knobInset)
-                        .size(KNOB_SIZE)
-                        // Port: spin the whole button, as in our fork; PattNG spins only the icon.
-                        .graphicsLayer { rotationZ = rotationAnim.value },
+                        .size(KNOB_SIZE),
                     shape = CircleShape,
                     containerColor = if (isRunning) colorFabActive
                     else if (isDarkTheme) colorFabInactiveDark
@@ -185,6 +181,7 @@ fun MainBottomBar(
                         tint = Color.White,
                         modifier = Modifier
                             .size(24.dp)
+                            .graphicsLayer { rotationZ = rotationAnim.value }
                     )
                 }
             }
