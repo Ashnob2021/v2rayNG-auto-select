@@ -1,7 +1,7 @@
 package com.v2ray.ang.ui.main
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -363,7 +363,10 @@ private fun ServerListItem(
                     stateDescription = selectedStateDescription
                 }
             }
-            .clickable { actions.select(row.guid) }
+            .combinedClickable(
+                onClick = { actions.select(row.guid) },
+                onLongClick = { actions.more(row.guid, row.profile) },
+            )
     ) {
         Box(
             Modifier
