@@ -139,6 +139,9 @@
             android:name=".ui.logcat.LogcatActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.dnsdiagnose.DnsDiagnoseActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.routing.RoutingSettingActivity"
             android:exported="false" />
         <activity

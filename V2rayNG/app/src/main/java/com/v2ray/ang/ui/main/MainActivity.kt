@@ -30,6 +30,7 @@ import com.v2ray.ang.ui.AboutActivity
 import com.v2ray.ang.ui.backup.BackupActivity
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
 import com.v2ray.ang.ui.checkupdate.CheckUpdateActivity
+import com.v2ray.ang.ui.dnsdiagnose.DnsDiagnoseActivity
 import com.v2ray.ang.ui.logcat.LogcatActivity
 import com.v2ray.ang.ui.perappproxy.PerAppProxyActivity
 import com.v2ray.ang.ui.routing.RoutingSettingActivity
@@ -116,6 +117,7 @@ class MainActivity : HelperBaseComponentActivity() {
                     MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()
                     is MainAction.SelectServer -> setSelectServer(action.guid)
                     is MainAction.EditServer -> editServer(action.guid, action.profile)
+                    is MainAction.DiagnoseDns -> openDnsDiagnose(action.guid)
                     is MainAction.ShareClipboard -> shareToClipboard(action.guid)
                     is MainAction.ShareFullContent -> shareFullContentAsync(action.guid)
                     is MainAction.OpenSubscriptionLink -> openSubscriptionLink(action.url)
@@ -251,6 +253,13 @@ class MainActivity : HelperBaseComponentActivity() {
                 LogUtil.e(AppConfig.TAG, "Failed to read content from URI", e)
             }
         }
+    }
+
+    private fun openDnsDiagnose(guid: String) {
+        val intent = Intent(this, DnsDiagnoseActivity::class.java).apply {
+            putExtra("guid", guid)
+        }
+        startActivity(intent)
     }
 
     private fun editServer(guid: String, profile: ProfileItem) {

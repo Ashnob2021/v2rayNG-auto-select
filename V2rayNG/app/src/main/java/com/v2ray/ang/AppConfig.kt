@@ -115,6 +115,7 @@ object AppConfig {
     const val TAG_FRAGMENT = "fragment"
     const val TAG_DNS = "dns-module"
     const val TAG_DOMESTIC_DNS = "domestic-dns"
+    const val TAG_DIRECT_DOH = "direct-doh"
     const val TAG_BALANCER = "balancer-main"
     const val TAG_BALANCER_PRE = "balancer"
 
@@ -148,6 +149,7 @@ object AppConfig {
     /** DNS server addresses. */
     const val DNS_PROXY = "https://cloudflare-dns.com/dns-query"
     const val DNS_DIRECT = "223.5.5.5"
+    const val DNS_DIRECT_DOH = "https://1.1.1.1/dns-query"
     const val DNS_VPN = "1.1.1.1"
     const val GEOSITE_PRIVATE = "geosite:private"
     const val GEOSITE_CN = "geosite:cn"

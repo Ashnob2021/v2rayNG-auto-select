@@ -1,5 +1,6 @@
 package com.v2ray.ang.ui.server
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +50,9 @@ import com.v2ray.ang.ui.compose.FormTextField
 import com.v2ray.ang.ui.compose.NavigationBarsSpacer
 import com.v2ray.ang.ui.compose.SettingsSwitchItem
 import com.v2ray.ang.ui.compose.verticalScrollbar
+import com.v2ray.ang.ui.dnsdiagnose.DnsDiagnoseActivity
 import com.v2ray.ang.util.JsonUtil
+import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -481,6 +486,14 @@ abstract class BaseServerActivity : BaseComponentActivity() {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 content()
+                if (editGuid.isNotEmpty() && Utils.isDomainName(initialConfig.server)) {
+                    OutlinedButton(
+                        onClick = { openDnsDiagnose() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.dns_diagnose_menu))
+                    }
+                }
                 NavigationBarsSpacer()
             }
         }
@@ -495,6 +508,13 @@ abstract class BaseServerActivity : BaseComponentActivity() {
                 onDismiss = { showDeleteDialog = false }
             )
         }
+    }
+
+    private fun openDnsDiagnose() {
+        val intent = Intent(this, DnsDiagnoseActivity::class.java).apply {
+            putExtra("guid", editGuid)
+        }
+        startActivity(intent)
     }
 
     private fun deleteServer(guid: String) {

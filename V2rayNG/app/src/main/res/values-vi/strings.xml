@@ -563,4 +563,37 @@
     <string name="sub_info_open_page">Mở trang thông tin đăng ký</string>
     <string name="sub_info_unlimited">Không giới hạn</string>
 
+    <!-- DNS diagnose screen -->
+    <string name="dns_diagnose_title">DNS Diagnosis</string>
+    <string name="dns_diagnose_menu">Diagnose DNS</string>
+    <string name="dns_diagnose_domain_label">Server domain</string>
+    <string name="dns_diagnose_domain_note">The domain is read from the selected config.</string>
+    <string name="dns_diagnose_tests_title">Tests</string>
+    <string name="dns_diagnose_tests_note">What each resolver answered for the server domain.</string>
+    <string name="dns_diagnose_resolver_system">System DNS</string>
+    <string name="dns_diagnose_verdict_title">Verdict</string>
+    <string name="dns_diagnose_verdict_healthy">DNS looks healthy — the problem is elsewhere.</string>
+    <string name="dns_diagnose_verdict_hijacked">DNS is hijacked</string>
+    <string name="dns_diagnose_verdict_hijacked_evidence">System DNS said %1$s, but direct DoH says %2$s.</string>
+    <string name="dns_diagnose_verdict_unresolvable">The domain does not resolve at all.</string>
+    <string name="dns_diagnose_verdict_doh_unreachable">Even DoH does not answer.</string>
+    <string name="dns_diagnose_verdict_system_failed">The system resolver answers nothing, but direct DoH works.</string>
+    <string name="dns_diagnose_fix_title">Fix: direct DoH for this domain</string>
+    <string name="dns_diagnose_fix_note">DNS questions are asked encrypted, directly from 1.1.1.1 — poisoned UDP no longer answers.</string>
+    <string name="dns_diagnose_apply">Apply direct DoH</string>
+    <string name="dns_diagnose_applied">Direct DoH applied</string>
+    <string name="dns_diagnose_revert">Revert to before</string>
+    <string name="dns_diagnose_reverted">Reverted</string>
+    <string name="dns_diagnose_revert_note">The original profile is untouched; reverting just clears the flag.</string>
+    <string name="dns_diagnose_retest">Test again</string>
+    <string name="dns_diagnose_testing">Testing…</string>
+    <string name="dns_diagnose_fix_verified">Fix verified: direct DoH resolves the domain.</string>
+    <string name="dns_diagnose_restart_note">If this config is connected right now, reconnect once for the fix to take effect.</string>
+    <string name="dns_diagnose_no_domain">This config has no domain, so DNS plays no part.</string>
+    <string name="dns_diagnose_no_profile">Config not found.</string>
+    <string name="dns_diagnose_error_timeout">Timed out</string>
+    <string name="dns_diagnose_error_no_answer">No answer</string>
+    <string name="dns_diagnose_error_network">Network error</string>
+    <string name="dns_diagnose_error_bad_response">Bad response</string>
+    <string name="dns_diagnose_error_no_resolver">No system resolver found</string>
 </resources>

@@ -330,6 +330,7 @@ class MainViewModel(
             is MainAction.EditServer,
             is MainAction.ShareClipboard,
             is MainAction.ShareFullContent,
+            is MainAction.DiagnoseDns,
             is MainAction.OpenSubscriptionLink -> {
                 // Handled by Activity via its onAction lambda
             }

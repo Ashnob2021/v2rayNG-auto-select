@@ -9,6 +9,7 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.ui.compose.AppDropdownMenuItems
 import com.v2ray.ang.ui.compose.SelectListDialog
+import com.v2ray.ang.util.Utils
 
 private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: MainAction) {
     QRCode(R.string.menu_item_import_config_qrcode, MainAction.ImportQRcode),
@@ -50,14 +51,18 @@ internal enum class ServerMenuAction(
     ShareClipboard(R.string.share_method_clipboard, isShareAction = true, supportsComplexProfiles = false),
     ShareFullContent(R.string.share_method_full_content, isShareAction = true, supportsComplexProfiles = true),
     Edit(R.string.action_edit, isShareAction = false, supportsComplexProfiles = true),
+    DiagnoseDns(R.string.dns_diagnose_menu, isShareAction = false, supportsComplexProfiles = false),
     Delete(R.string.action_delete, isShareAction = false, supportsComplexProfiles = true),
 }
 
 internal fun serverMenuActions(
     isComplexProfile: Boolean,
     includeManagementActions: Boolean,
+    canDiagnoseDns: Boolean = false,
 ): List<ServerMenuAction> = ServerMenuAction.entries.filter { action ->
-    (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
+    (includeManagementActions || action.isShareAction)
+        && (!isComplexProfile || action.supportsComplexProfiles)
+        && (action != ServerMenuAction.DiagnoseDns || canDiagnoseDns)
 }
 
 @Composable
@@ -86,6 +91,7 @@ fun ShareMethodDialog(
     val menuActions = serverMenuActions(
         isComplexProfile = profile.configType.isComplexType(),
         includeManagementActions = more,
+        canDiagnoseDns = Utils.isDomainName(profile.server),
     )
     SelectListDialog(
         options = menuActions,
@@ -97,6 +103,7 @@ fun ShareMethodDialog(
                 ServerMenuAction.ShareClipboard -> onAction(MainAction.ShareClipboard(guid))
                 ServerMenuAction.ShareFullContent -> onAction(MainAction.ShareFullContent(guid))
                 ServerMenuAction.Edit -> onAction(MainAction.EditServer(guid, profile))
+                ServerMenuAction.DiagnoseDns -> onAction(MainAction.DiagnoseDns(guid))
                 ServerMenuAction.Delete -> onRemove(guid, profile.remarks)
             }
         },

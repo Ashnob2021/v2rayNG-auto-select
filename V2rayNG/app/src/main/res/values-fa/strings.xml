@@ -565,4 +565,37 @@
     <string name="sub_info_open_page">باز کردن صفحه اطلاعات اشتراک</string>
     <string name="sub_info_unlimited">نامحدود</string>
 
+    <!-- DNS diagnose screen -->
+    <string name="dns_diagnose_title">عیب‌یابی DNS</string>
+    <string name="dns_diagnose_menu">عیب‌یابی DNS</string>
+    <string name="dns_diagnose_domain_label">دامنه سرور</string>
+    <string name="dns_diagnose_domain_note">دامنه از خود کانفیگ خوانده شده است.</string>
+    <string name="dns_diagnose_tests_title">تست‌ها</string>
+    <string name="dns_diagnose_tests_note">هر سطر یعنی این ریزالور برای دامنه سرور چه جوابی داد.</string>
+    <string name="dns_diagnose_resolver_system">DNS سیستم گوشی</string>
+    <string name="dns_diagnose_verdict_title">رأی</string>
+    <string name="dns_diagnose_verdict_healthy">DNS سالم است — مشکل از جای دیگری است.</string>
+    <string name="dns_diagnose_verdict_hijacked">DNS هایجک شده است</string>
+    <string name="dns_diagnose_verdict_hijacked_evidence">DNS سیستم گفت %1$s، ولی DoH مستقیم می‌گوید %2$s.</string>
+    <string name="dns_diagnose_verdict_unresolvable">دامنه اصلاً حل نمی‌شود.</string>
+    <string name="dns_diagnose_verdict_doh_unreachable">حتی DoH هم جواب نمی‌دهد.</string>
+    <string name="dns_diagnose_verdict_system_failed">ریزالور سیستم جواب نمی‌دهد، ولی DoH مستقیم کار می‌کند.</string>
+    <string name="dns_diagnose_fix_title">راه‌حل: DoH مستقیم برای همین دامنه</string>
+    <string name="dns_diagnose_fix_note">سؤال DNS رمزنگاری‌شده و مستقیم از 1.1.1.1 پرسیده می‌شود؛ دیگر UDP مسموم جواب نمی‌دهد.</string>
+    <string name="dns_diagnose_apply">اعمال DoH مستقیم</string>
+    <string name="dns_diagnose_applied">DoH مستقیم اعمال شد</string>
+    <string name="dns_diagnose_revert">بازگردانی به قبل</string>
+    <string name="dns_diagnose_reverted">برگردانده شد</string>
+    <string name="dns_diagnose_revert_note">پروفایل اصلی دست نمی‌خورد؛ برگشت یعنی پاک‌کردن پرچم.</string>
+    <string name="dns_diagnose_retest">دوباره تست کن</string>
+    <string name="dns_diagnose_testing">در حال تست…</string>
+    <string name="dns_diagnose_fix_verified">تأیید راه‌حل: DoH مستقیم دامنه را حل می‌کند.</string>
+    <string name="dns_diagnose_restart_note">اگر این کانفیگ همین حالا وصل است، برای اثر کردن راه‌حل اتصال را یک بار قطع و وصل کنید.</string>
+    <string name="dns_diagnose_no_domain">این کانفیگ دامنه ندارد؛ DNS دخالتی ندارد.</string>
+    <string name="dns_diagnose_no_profile">کانفیگ پیدا نشد.</string>
+    <string name="dns_diagnose_error_timeout">زمان تمام شد</string>
+    <string name="dns_diagnose_error_no_answer">جواب نداد</string>
+    <string name="dns_diagnose_error_network">خطای شبکه</string>
+    <string name="dns_diagnose_error_bad_response">جواب خراب</string>
+    <string name="dns_diagnose_error_no_resolver">ریزالور سیستم پیدا نشد</string>
 </resources>

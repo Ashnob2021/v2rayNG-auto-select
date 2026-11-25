@@ -19,7 +19,35 @@ class MainImportMenuTest {
     fun regularMoreMenuContainsEveryActionInDisplayOrder() {
         assertEquals(
             ServerMenuAction.entries,
+            serverMenuActions(isComplexProfile = false, includeManagementActions = true, canDiagnoseDns = true),
+        )
+    }
+
+    @Test
+    fun moreMenuWithoutDomainExcludesDiagnoseDns() {
+        assertEquals(
+            ServerMenuAction.entries - ServerMenuAction.DiagnoseDns,
             serverMenuActions(isComplexProfile = false, includeManagementActions = true),
+        )
+    }
+
+    @Test
+    fun complexMoreMenuExcludesDiagnoseDns() {
+        assertEquals(
+            listOf(ServerMenuAction.ShareFullContent, ServerMenuAction.Edit, ServerMenuAction.Delete),
+            serverMenuActions(isComplexProfile = true, includeManagementActions = true, canDiagnoseDns = true),
+        )
+    }
+
+    @Test
+    fun shareMenuNeverContainsDiagnoseDns() {
+        assertEquals(
+            listOf(
+                ServerMenuAction.ShareQRCode,
+                ServerMenuAction.ShareClipboard,
+                ServerMenuAction.ShareFullContent,
+            ),
+            serverMenuActions(isComplexProfile = false, includeManagementActions = false, canDiagnoseDns = true),
         )
     }
 

@@ -196,7 +196,8 @@ object CoreConfigManager {
         // User routing rules (policyGroupBalancerTags rewrites TAG_PROXY→balancer when main is POLICYGROUP).
         configureRouting(configContext, v2rayConfig, policyGroupBalancerTags)
         configureFakeDns(v2rayConfig)
-        configureDns(configContext, v2rayConfig, policyGroupBalancerTags)
+        val directDohDomains = collectDirectDohDomains(configContext)
+        configureDns(configContext, v2rayConfig, policyGroupBalancerTags, directDohDomains)
         configureLocalDns(configContext, v2rayConfig)
         configureRootModeDns(v2rayConfig)
 
@@ -221,7 +222,7 @@ object CoreConfigManager {
         }
 
         applyObservability(v2rayConfig, balancerStrategies)
-        resolveOutboundDomainsToHosts(v2rayConfig)
+        resolveOutboundDomainsToHosts(v2rayConfig, directDohDomains)
 
         return v2rayConfig
     }
@@ -864,8 +865,20 @@ object CoreConfigManager {
         configContext: CoreConfigContext,
         v2rayConfig: V2rayConfig,
         policyGroupBalancerTags: Map<String, String>,
+        directDohDomains: Set<String> = emptySet(),
     ) {
         val servers = ArrayList<Any>()
+        if (directDohDomains.isNotEmpty()) {
+            // Direct DoH for flagged profiles: first in the list, so it is
+            // consulted before the catch-all remote entries below.
+            servers.add(
+                V2rayConfig.DnsBean.ServersBean(
+                    address = AppConfig.DNS_DIRECT_DOH,
+                    domains = directDohDomains.map { "full:$it" },
+                    tag = AppConfig.TAG_DIRECT_DOH
+                )
+            )
+        }
         val remoteDns = SettingsManager.getRemoteDnsServers()
         val domesticDns = SettingsManager.getDomesticDnsServers()
 
@@ -893,6 +906,18 @@ object CoreConfigManager {
                 V2rayConfig.RoutingBean.RulesBean(
                     outboundTag = AppConfig.TAG_DIRECT,
                     inboundTag = ArrayList(domesticDnsTags),
+                    domain = null
+                )
+            )
+        }
+        if (directDohDomains.isNotEmpty()) {
+            // The tagged direct-DoH entry must go direct, not through the
+            // proxy: the default rule routes dns-module traffic to the proxy,
+            // which would be circular for the first dial.
+            v2rayConfig.routing.rules.add(
+                V2rayConfig.RoutingBean.RulesBean(
+                    outboundTag = AppConfig.TAG_DIRECT,
+                    inboundTag = arrayListOf(AppConfig.TAG_DIRECT_DOH),
                     domain = null
                 )
             )
@@ -1055,9 +1080,33 @@ object CoreConfigManager {
 
 
     /**
+     * Domains of profiles that opted into direct DoH resolution.
+     *
+     * The flag lives on the profile ([ProfileItem.directDohEnabled]); only
+     * domain addresses are collected, never IP literals.
+     */
+    private fun collectDirectDohDomains(configContext: CoreConfigContext): Set<String> {
+        val domains = mutableSetOf<String>()
+        val profiles = configContext.resolvedOutbounds.flatMap { spec ->
+            listOf(spec.profile) + spec.resolvedProfiles
+        }
+        for (profile in profiles) {
+            if (!profile.directDohEnabled) continue
+            val server = profile.server?.trim().orEmpty()
+            if (Utils.isDomainName(server)) {
+                domains.add(server.lowercase())
+            }
+        }
+        return domains
+    }
+
+    /**
      * Resolve outbound domains to IPs and write resolved hosts to DNS map.
      */
-    private fun resolveOutboundDomainsToHosts(v2rayConfig: V2rayConfig) {
+    private fun resolveOutboundDomainsToHosts(
+        v2rayConfig: V2rayConfig,
+        directDohDomains: Set<String> = emptySet(),
+    ) {
         if (MmkvManager.decodeSettingsString(AppConfig.PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD, AppConfig.DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD) != "1") {
             return
         }
@@ -1073,7 +1122,11 @@ object CoreConfigManager {
                 continue
             }
 
-            if (newHosts.containsKey(domain)) {
+            // A direct-DoH domain is resolved through the core DNS instead:
+            // pre-resolving it here would write the system resolver's
+            // (possibly poisoned) answer into dns.hosts, which shadows the
+            // direct-DoH entry.
+            if (newHosts.containsKey(domain) || directDohDomains.contains(domain.lowercase())) {
                 item.ensureSockopt().domainStrategy = "UseIP"
                 item.ensureSockopt().happyEyeballs = V2rayConfig.OutboundBean.StreamSettingsBean.HappyEyeballsBean(
                     prioritizeIPv6 = preferIpv6,
