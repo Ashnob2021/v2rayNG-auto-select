@@ -607,6 +607,8 @@
     <string name="conn_diagnose_sni_ok">SNI is not blocked — the handshake with the real SNI reaches the server.</string>
     <string name="conn_diagnose_tls_blocked">TLS is blocked — no handshake reaches the server with any SNI.</string>
     <string name="conn_diagnose_fingerprint_note">The probe uses the phone TLS stack, so it cannot reproduce the profile fingerprint; changing the fingerprint stays a fix to try.</string>
+    <string name="conn_diagnose_tls_skipped_reality">TLS probe skipped — this is a REALITY config. A plain TLS handshake is not a REALITY handshake, so it cannot prove anything here.</string>
+    <string name="conn_diagnose_tls_skipped_no_tls">TLS probe skipped — this config does not use TLS.</string>
     <string name="dns_diagnose_restart_note">If this config is connected right now, reconnect once for the fix to take effect.</string>
     <string name="dns_diagnose_no_domain">This config has no domain, so DNS plays no part.</string>
     <string name="dns_diagnose_no_profile">Config not found.</string>

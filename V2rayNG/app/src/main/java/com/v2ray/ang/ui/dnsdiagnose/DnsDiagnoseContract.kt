@@ -20,6 +20,7 @@ data class DnsDiagnoseUiState(
     val tcp: TcpProbeResult? = null,
     val tls: List<TlsProbeResult> = emptyList(),
     val sniVerdict: SniVerdictKind? = null,
+    val tlsSkipped: TlsSkippedReason? = null,
 )
 
 sealed interface DnsDiagnoseAction {

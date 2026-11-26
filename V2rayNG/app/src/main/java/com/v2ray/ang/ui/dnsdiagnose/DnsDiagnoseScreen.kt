@@ -339,6 +339,17 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    when (state.tlsSkipped) {
+        TlsSkippedReason.REALITY -> Text(
+            text = stringResource(R.string.conn_diagnose_tls_skipped_reality),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        TlsSkippedReason.NOT_TLS -> Text(
+            text = stringResource(R.string.conn_diagnose_tls_skipped_no_tls),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        null -> Unit
+    }
 }
 
 @Composable

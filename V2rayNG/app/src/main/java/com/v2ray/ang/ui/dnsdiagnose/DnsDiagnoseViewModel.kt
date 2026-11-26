@@ -2,7 +2,6 @@ package com.v2ray.ang.ui.dnsdiagnose
 
 import android.app.Application
 import androidx.lifecycle.viewModelScope
-import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.dto.entities.ProfileItem
@@ -76,7 +75,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         probeJob?.cancel()
         probeJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
-                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null)
+                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null, tlsSkipped = null)
             }
             var results = DnsProbe.probeDomain(domain, app)
             var evaluation = evaluateVerdict(results)
@@ -98,6 +97,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     tcp = connection?.tcp,
                     tls = connection?.tls.orEmpty(),
                     sniVerdict = connection?.sniVerdict,
+                    tlsSkipped = connection?.tlsSkipped,
                 )
             }
         }
@@ -149,8 +149,10 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
     /**
      * TCP, then SNI/TLS, against the IP the DNS stage trusted. Runs only
      * when the DNS stage produced an IP to dial and the profile has a
-     * port. TLS handshakes run only for TLS/REALITY configs; for anything
-     * else the TCP result alone is reported.
+     * port. TLS handshakes run only for TLS configs. For REALITY the
+     * plain-TLS probe is skipped: it is not a REALITY handshake, so it
+     * would report "TLS is blocked" for a server that works fine over
+     * REALITY. For anything else the TCP result alone is reported.
      */
     private suspend fun runConnectionProbes(
         results: List<DnsProbeResult>,
@@ -161,15 +163,21 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         val port = profile.serverPort?.trim()?.toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
         val domain = _uiState.value.domain
         if (domain.isEmpty()) return null
-        val tlsApplicable = AppConfig.TLS.equals(profile.security, ignoreCase = true) ||
-            AppConfig.REALITY.equals(profile.security, ignoreCase = true)
-        if (!tlsApplicable) {
-            val tcp = TlsProbe.probeTcp(ip, port)
-            return ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED)
+        return when (tlsProbeMode(profile.security)) {
+            TlsProbeMode.TLS -> {
+                val realSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+                val alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+                TlsProbe.probeConnection(ip, port, realSni, alpn)
+            }
+            TlsProbeMode.REALITY -> {
+                val tcp = TlsProbe.probeTcp(ip, port)
+                ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED, TlsSkippedReason.REALITY)
+            }
+            TlsProbeMode.NONE -> {
+                val tcp = TlsProbe.probeTcp(ip, port)
+                ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED, TlsSkippedReason.NOT_TLS)
+            }
         }
-        val realSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
-        val alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
-        return TlsProbe.probeConnection(ip, port, realSni, alpn)
     }
 
     /**

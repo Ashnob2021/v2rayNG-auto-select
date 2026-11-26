@@ -201,6 +201,7 @@ data class ConnectionProbeResult(
     val tcp: TcpProbeResult,
     val tls: List<TlsProbeResult>,
     val sniVerdict: SniVerdictKind,
+    val tlsSkipped: TlsSkippedReason? = null,
 )
 
 enum class SniVerdictKind {
@@ -208,6 +209,34 @@ enum class SniVerdictKind {
     FILTERED,
     TLS_BLOCKED,
     SKIPPED,
+}
+
+/**
+ * Whether a plain TLS/SNI probe means anything for a config.
+ * TLS configs get the full probe. REALITY configs do not: a plain TLS
+ * handshake is not a REALITY handshake, so the probe would report
+ * "TLS is blocked" for a server that works fine over REALITY — exactly
+ * the false verdict this exists to avoid. Anything else has no TLS
+ * handshake to test at all.
+ */
+enum class TlsProbeMode {
+    TLS,
+    REALITY,
+    NONE,
+}
+
+enum class TlsSkippedReason {
+    REALITY,
+    NOT_TLS,
+}
+
+/** Pure decision for [TlsProbeMode]; covered by unit tests. */
+fun tlsProbeMode(security: String?): TlsProbeMode {
+    return when {
+        "tls".equals(security, ignoreCase = true) -> TlsProbeMode.TLS
+        "reality".equals(security, ignoreCase = true) -> TlsProbeMode.REALITY
+        else -> TlsProbeMode.NONE
+    }
 }
 
 /** Pure decision for [TlsProbe.probeConnection]; covered by unit tests. */

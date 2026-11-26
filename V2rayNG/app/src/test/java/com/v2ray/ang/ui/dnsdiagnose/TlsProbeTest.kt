@@ -144,6 +144,17 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `tls probe mode follows the security type`() {
+        assertEquals(TlsProbeMode.TLS, tlsProbeMode("tls"))
+        assertEquals(TlsProbeMode.TLS, tlsProbeMode("TLS"))
+        assertEquals(TlsProbeMode.REALITY, tlsProbeMode("reality"))
+        assertEquals(TlsProbeMode.REALITY, tlsProbeMode("REALITY"))
+        assertEquals(TlsProbeMode.NONE, tlsProbeMode("none"))
+        assertEquals(TlsProbeMode.NONE, tlsProbeMode(""))
+        assertEquals(TlsProbeMode.NONE, tlsProbeMode(null))
+    }
+
+    @Test
     fun `tcp exception classification`() {
         assertEquals(TcpOutcome.TIMEOUT, classifyTcpException(SocketTimeoutException()))
         assertEquals(TcpOutcome.REFUSED, classifyTcpException(ConnectException("Connection refused")))
