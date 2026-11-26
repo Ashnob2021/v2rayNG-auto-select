@@ -1100,17 +1100,67 @@ object CoreConfigManager {
         return domains
     }
 
+    internal enum class OutboundDomainResolution {
+        /** Resolve through the core DNS (direct DoH); never write a hosts entry. */
+        USE_CORE_DNS,
+
+        /** Method "1" with an existing hosts entry: UseIP, no new write. */
+        USE_EXISTING_HOSTS,
+
+        /** Method "1": resolve via the system resolver, write hosts, UseIP. */
+        PRE_RESOLVE_TO_HOSTS,
+
+        /** Leave the outbound untouched. */
+        NONE,
+    }
+
+    /**
+     * Pure decision for one outbound domain in [resolveOutboundDomainsToHosts].
+     *
+     * A direct-DoH domain always resolves through the core DNS, regardless of
+     * the outbound domain resolution method ("0", "1" or "2"): without
+     * `domainStrategy = "UseIP"` the core never consults its direct-DoH DNS
+     * entry and the dial falls back to the (poisoned) system resolver.
+     */
+    internal fun planOutboundDomainResolution(
+        domain: String?,
+        directDohDomains: Set<String>,
+        resolveMethod: String?,
+        alreadyInHosts: Boolean,
+    ): OutboundDomainResolution {
+        if (!domain.isNullOrEmpty() && directDohDomains.contains(domain.lowercase())) {
+            return OutboundDomainResolution.USE_CORE_DNS
+        }
+        if (resolveMethod != "1") {
+            return OutboundDomainResolution.NONE
+        }
+        if (alreadyInHosts) {
+            return OutboundDomainResolution.USE_EXISTING_HOSTS
+        }
+        return OutboundDomainResolution.PRE_RESOLVE_TO_HOSTS
+    }
+
+    private fun applyUseIpSockopt(item: V2rayConfig.OutboundBean, preferIpv6: Boolean) {
+        item.ensureSockopt().domainStrategy = "UseIP"
+        item.ensureSockopt().happyEyeballs = V2rayConfig.OutboundBean.StreamSettingsBean.HappyEyeballsBean(
+            prioritizeIPv6 = preferIpv6,
+            interleave = 2
+        )
+    }
+
     /**
      * Resolve outbound domains to IPs and write resolved hosts to DNS map.
+     *
+     * Direct-DoH domains are handled for every resolution method: they get
+     * `domainStrategy = "UseIP"` so the core resolves them through its
+     * direct-DoH DNS entry, and no hosts entry is ever written for them.
+     * Other domains are only pre-resolved when the method is "1".
      */
     private fun resolveOutboundDomainsToHosts(
         v2rayConfig: V2rayConfig,
         directDohDomains: Set<String> = emptySet(),
     ) {
-        if (MmkvManager.decodeSettingsString(AppConfig.PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD, AppConfig.DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD) != "1") {
-            return
-        }
-
+        val resolveMethod = MmkvManager.decodeSettingsString(AppConfig.PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD, AppConfig.DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD)
         val proxyOutboundList = v2rayConfig.getAllProxyOutbound()
         val dns = v2rayConfig.dns ?: return
         val newHosts = dns.hosts?.toMutableMap() ?: mutableMapOf()
@@ -1122,37 +1172,38 @@ object CoreConfigManager {
                 continue
             }
 
-            // A direct-DoH domain is resolved through the core DNS instead:
-            // pre-resolving it here would write the system resolver's
-            // (possibly poisoned) answer into dns.hosts, which shadows the
-            // direct-DoH entry.
-            if (newHosts.containsKey(domain) || directDohDomains.contains(domain.lowercase())) {
-                item.ensureSockopt().domainStrategy = "UseIP"
-                item.ensureSockopt().happyEyeballs = V2rayConfig.OutboundBean.StreamSettingsBean.HappyEyeballsBean(
-                    prioritizeIPv6 = preferIpv6,
-                    interleave = 2
-                )
-                continue
-            }
+            when (planOutboundDomainResolution(domain, directDohDomains, resolveMethod, newHosts.containsKey(domain))) {
+                OutboundDomainResolution.USE_CORE_DNS,
+                OutboundDomainResolution.USE_EXISTING_HOSTS -> {
+                    // A direct-DoH domain is resolved through the core DNS
+                    // instead: pre-resolving it here would write the system
+                    // resolver's (possibly poisoned) answer into dns.hosts,
+                    // which shadows the direct-DoH entry.
+                    applyUseIpSockopt(item, preferIpv6)
+                    continue
+                }
 
-            val resolvedIps = HttpUtil.resolveHostToIP(domain, preferIpv6)
-            if (resolvedIps.isNullOrEmpty()) {
-                continue
-            }
+                OutboundDomainResolution.NONE -> continue
 
-            item.ensureSockopt().domainStrategy = "UseIP"
-            item.ensureSockopt().happyEyeballs = V2rayConfig.OutboundBean.StreamSettingsBean.HappyEyeballsBean(
-                prioritizeIPv6 = preferIpv6,
-                interleave = 2
-            )
-            newHosts[domain] = if (resolvedIps.size == 1) {
-                resolvedIps[0]
-            } else {
-                resolvedIps
+                OutboundDomainResolution.PRE_RESOLVE_TO_HOSTS -> {
+                    val resolvedIps = HttpUtil.resolveHostToIP(domain, preferIpv6)
+                    if (resolvedIps.isNullOrEmpty()) {
+                        continue
+                    }
+
+                    applyUseIpSockopt(item, preferIpv6)
+                    newHosts[domain] = if (resolvedIps.size == 1) {
+                        resolvedIps[0]
+                    } else {
+                        resolvedIps
+                    }
+                }
             }
         }
 
-        dns.hosts = newHosts
+        if (resolveMethod == "1") {
+            dns.hosts = newHosts
+        }
     }
 
     /**

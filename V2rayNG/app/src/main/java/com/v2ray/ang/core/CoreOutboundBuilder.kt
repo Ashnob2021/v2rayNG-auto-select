@@ -680,13 +680,23 @@ object CoreOutboundBuilder {
         return true
     }
 
+    /**
+     * Pure decision for [getServerAddress]: method "2" replaces a domain
+     * with the system resolver's answer, which for a direct-DoH profile
+     * would write the poisoned IP into the outbound address and the core
+     * DNS entry would never be used. Such profiles always keep the domain.
+     */
+    internal fun shouldReplaceDomainWithResolvedIp(directDohEnabled: Boolean, resolveMethod: String?): Boolean {
+        return resolveMethod == "2" && !directDohEnabled
+    }
+
     private fun getServerAddress(profileItem: ProfileItem): String {
         if (Utils.isPureIpAddress(profileItem.server.orEmpty())) {
             return profileItem.server.orEmpty()
         }
 
         val domain = HttpUtil.toIdnDomain(profileItem.server.orEmpty())
-        if (MmkvManager.decodeSettingsString(AppConfig.PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD, AppConfig.DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD) != "2") {
+        if (!shouldReplaceDomainWithResolvedIp(profileItem.directDohEnabled, MmkvManager.decodeSettingsString(AppConfig.PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD, AppConfig.DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD))) {
             return domain
         }
         //Resolve and replace domain
