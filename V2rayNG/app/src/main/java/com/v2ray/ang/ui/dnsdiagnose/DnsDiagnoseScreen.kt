@@ -98,6 +98,53 @@ private fun DnsDiagnoseContent(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
+    // Applied fix: always visible while the flag is on, before or after
+    // the test and whatever the verdict says. Before this, the applied
+    // state and the Revert button only existed inside the Fix section,
+    // which is shown only when the verdict is a DNS problem — so on a
+    // network where DNS looks healthy the flag was invisible and there
+    // was no way to revert it from this screen, even though the fix
+    // itself can break the config on that network.
+    if (state.flagOn) {
+        Spacer(modifier = Modifier.height(16.dp))
+        ItemDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.dns_diagnose_fix_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = stringResource(R.string.dns_diagnose_applied),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { onAction(DnsDiagnoseAction.RevertFix) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(R.string.dns_diagnose_revert))
+        }
+        Text(
+            text = stringResource(R.string.dns_diagnose_revert_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.dns_diagnose_restart_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (state.fixVerified) {
+            Text(
+                text = stringResource(R.string.dns_diagnose_fix_verified),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+
     Spacer(modifier = Modifier.height(16.dp))
     ItemDivider()
     Spacer(modifier = Modifier.height(16.dp))
@@ -206,6 +253,9 @@ private fun DnsDiagnoseContent(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
+        // The applied state and Revert live in the block above the
+        // tests now, so they are reachable whatever the verdict is.
+        // This section only offers Apply when the flag is off.
         if (!state.flagOn) {
             Button(
                 onClick = { onAction(DnsDiagnoseAction.ApplyFix) },
@@ -213,38 +263,11 @@ private fun DnsDiagnoseContent(
             ) {
                 Text(text = stringResource(R.string.dns_diagnose_apply))
             }
-        } else {
             Text(
-                text = stringResource(R.string.dns_diagnose_applied),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { onAction(DnsDiagnoseAction.RevertFix) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = stringResource(R.string.dns_diagnose_revert))
-            }
-        }
-        Text(
-            text = stringResource(R.string.dns_diagnose_revert_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (state.flagOn) {
-            Text(
-                text = stringResource(R.string.dns_diagnose_restart_note),
+                text = stringResource(R.string.dns_diagnose_revert_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (state.fixVerified) {
-                Text(
-                    text = stringResource(R.string.dns_diagnose_fix_verified),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
         }
     }
 
