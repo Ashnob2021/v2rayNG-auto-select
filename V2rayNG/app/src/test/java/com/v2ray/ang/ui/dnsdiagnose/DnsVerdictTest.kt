@@ -100,7 +100,10 @@ class DnsVerdictTest {
         val results = listOf(
             failed(DnsResolver.SYSTEM, ProbeError.TIMEOUT),
             failed(DnsResolver.DOH_1_1_1_1, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_1_0_0_1, ProbeError.NETWORK),
             failed(DnsResolver.DOH_8_8_8_8, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_8_8_4_4, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_9_9_9_9, ProbeError.NETWORK),
             failed(DnsResolver.DOH_CLOUDFLARE, ProbeError.NETWORK),
         )
         val evaluation = evaluateVerdict(results)
@@ -126,11 +129,48 @@ class DnsVerdictTest {
         val results = listOf(
             ok(DnsResolver.SYSTEM, "93.184.216.34"),
             failed(DnsResolver.DOH_1_1_1_1, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_1_0_0_1, ProbeError.NETWORK),
             failed(DnsResolver.DOH_8_8_8_8, ProbeError.TIMEOUT),
+            failed(DnsResolver.DOH_8_8_4_4, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_9_9_9_9, ProbeError.NETWORK),
             failed(DnsResolver.DOH_CLOUDFLARE, ProbeError.NETWORK),
         )
         val evaluation = evaluateVerdict(results)
         assertEquals(DnsVerdictKind.DOH_UNREACHABLE, evaluation.verdict.kind)
+        assertFalse(evaluation.needsRetry)
+    }
+
+    @Test
+    fun `filtering sinkhole is filtered even when no doh answers`() {
+        val results = listOf(
+            ok(DnsResolver.SYSTEM, "10.10.34.35"),
+            failed(DnsResolver.DOH_1_1_1_1, ProbeError.BAD_RESPONSE),
+            failed(DnsResolver.DOH_1_0_0_1, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_8_8_8_8, ProbeError.TIMEOUT),
+            failed(DnsResolver.DOH_8_8_4_4, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_9_9_9_9, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_CLOUDFLARE, ProbeError.NETWORK),
+        )
+        val evaluation = evaluateVerdict(results)
+        assertEquals(DnsVerdictKind.FILTERED, evaluation.verdict.kind)
+        assertTrue(evaluation.verdict.dohIps.isEmpty())
+        assertFalse(evaluation.needsRetry)
+    }
+
+    @Test
+    fun `one answering doh endpoint is enough for filtered`() {
+        val results = listOf(
+            ok(DnsResolver.SYSTEM, "10.10.34.35"),
+            failed(DnsResolver.DOH_1_1_1_1, ProbeError.BAD_RESPONSE),
+            failed(DnsResolver.DOH_1_0_0_1, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_8_8_8_8, ProbeError.TIMEOUT),
+            failed(DnsResolver.DOH_8_8_4_4, ProbeError.NETWORK),
+            ok(DnsResolver.DOH_9_9_9_9, "93.184.216.34"),
+            failed(DnsResolver.DOH_CLOUDFLARE, ProbeError.NETWORK),
+        )
+        val evaluation = evaluateVerdict(results)
+        assertEquals(DnsVerdictKind.FILTERED, evaluation.verdict.kind)
+        assertEquals(listOf("93.184.216.34"), evaluation.verdict.dohIps)
         assertFalse(evaluation.needsRetry)
     }
 

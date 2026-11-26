@@ -577,6 +577,7 @@
     <string name="dns_diagnose_verdict_healthy">DNS سالم است — مشکل از جای دیگری است.</string>
     <string name="dns_diagnose_verdict_hijacked">DNS هایجک شده است</string>
     <string name="dns_diagnose_verdict_filtered">دامنه فیلتر شده است — DNS سیستم آدرس فیلترینگ را برمی‌گرداند.</string>
+    <string name="dns_diagnose_verdict_filtered_no_doh">هیچ DoHای جواب نداد، پس آدرس واقعی هنوز معلوم نیست. خود آدرس فیلترینگ ثابت می‌کند دامنه فیلتر است، ولی فعلاً هیچ IP قابل‌اعتمادی برای وصل شدن نیست.</string>
     <string name="dns_diagnose_verdict_hijacked_evidence">DNS سیستم گفت %1$s، ولی DoH مستقیم می‌گوید %2$s.</string>
     <string name="dns_diagnose_verdict_unresolvable">دامنه اصلاً حل نمی‌شود.</string>
     <string name="dns_diagnose_verdict_doh_unreachable">حتی DoH هم جواب نمی‌دهد.</string>

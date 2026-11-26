@@ -20,9 +20,15 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 /**
- * Probes one domain against four resolvers in parallel:
- * the phone's system UDP resolver, and DoH to 1.1.1.1, 8.8.8.8 and
- * cloudflare-dns.com (RFC 8484 GET).
+ * Probes one domain against seven resolvers in parallel:
+ * the phone's system UDP resolver, and DoH to 1.1.1.1, 1.0.0.1,
+ * 8.8.8.8, 8.8.4.4, 9.9.9.9 and cloudflare-dns.com (RFC 8484 GET).
+ *
+ * Several DoH endpoints from different operators are probed on
+ * purpose: on a filtered network any single DoH endpoint can be
+ * intercepted or blocked (a "Bad response" from one does not mean
+ * the domain is unresolvable), so one answering endpoint is enough
+ * to learn the real address.
  *
  * The cloudflare-dns.com row never asks the system DNS for its own
  * hostname: the system resolver may be the poisoned one under test, so
@@ -45,9 +51,12 @@ object DnsProbe {
         val asciiDomain = HttpUtil.toIdnDomain(domain.trim())
         val system = async(Dispatchers.IO) { probeSystemDns(asciiDomain, context) }
         val doh1 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_1_1_1_1, plainClient) }
+        val doh1b = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_1_0_0_1, plainClient) }
         val doh8 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_8_8_8_8, plainClient) }
+        val doh8b = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_8_8_4_4, plainClient) }
+        val doh9 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_9_9_9_9, plainClient) }
         val dohCf = async(Dispatchers.IO) { probeDohCloudflare(asciiDomain) }
-        listOf(system.await(), doh1.await(), doh8.await(), dohCf.await())
+        listOf(system.await(), doh1.await(), doh1b.await(), doh8.await(), doh8b.await(), doh9.await(), dohCf.await())
     }
 
     private fun probeSystemDns(domain: String, context: Context): DnsProbeResult {

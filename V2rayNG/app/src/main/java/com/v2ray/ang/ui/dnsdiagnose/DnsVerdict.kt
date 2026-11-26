@@ -1,7 +1,7 @@
 package com.v2ray.ang.ui.dnsdiagnose
 
 /**
- * The verdict of one diagnose round, decided from the four probe rows.
+ * The verdict of one diagnose round, decided from the probe rows.
  * Pure logic, covered by unit tests.
  */
 enum class DnsVerdictKind {
@@ -65,15 +65,21 @@ fun evaluateVerdict(results: List<DnsProbeResult>): VerdictEvaluation {
             needsRetry = false
         )
     }
-    if (dohOk.isEmpty()) {
-        return VerdictEvaluation(
-            DnsVerdict(DnsVerdictKind.DOH_UNREACHABLE, systemIps = systemIps),
-            needsRetry = false
-        )
-    }
+    // The filtering sinkhole is checked before DOH_UNREACHABLE on
+    // purpose: 10.10.34.34/35 alone proves the domain is filtered,
+    // even when no DoH endpoint answered to confirm the real address.
+    // In that case the verdict is FILTERED with an empty DoH list, and
+    // the screen says so instead of hiding the filtering behind
+    // "DoH does not answer".
     if (systemIps.any { isFilteringIp(it) }) {
         return VerdictEvaluation(
             DnsVerdict(DnsVerdictKind.FILTERED, systemIps = systemIps, dohIps = dohIps),
+            needsRetry = false
+        )
+    }
+    if (dohOk.isEmpty()) {
+        return VerdictEvaluation(
+            DnsVerdict(DnsVerdictKind.DOH_UNREACHABLE, systemIps = systemIps),
             needsRetry = false
         )
     }

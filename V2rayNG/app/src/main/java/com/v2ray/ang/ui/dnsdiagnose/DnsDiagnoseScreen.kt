@@ -139,14 +139,23 @@ private fun DnsDiagnoseContent(
         )
         Text(text = verdictText(verdict), style = MaterialTheme.typography.bodyLarge)
         if (verdict.kind == DnsVerdictKind.HIJACKED || verdict.kind == DnsVerdictKind.FILTERED) {
-            Text(
-                text = stringResource(
-                    R.string.dns_diagnose_verdict_hijacked_evidence,
-                    verdict.systemIps.joinToString(", "),
-                    verdict.dohIps.joinToString(", "),
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (verdict.dohIps.isNotEmpty()) {
+                Text(
+                    text = stringResource(
+                        R.string.dns_diagnose_verdict_hijacked_evidence,
+                        verdict.systemIps.joinToString(", "),
+                        verdict.dohIps.joinToString(", "),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else if (verdict.kind == DnsVerdictKind.FILTERED) {
+                // The sinkhole address alone proves filtering, but no DoH
+                // endpoint answered, so the real address is still unknown.
+                Text(
+                    text = stringResource(R.string.dns_diagnose_verdict_filtered_no_doh),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 

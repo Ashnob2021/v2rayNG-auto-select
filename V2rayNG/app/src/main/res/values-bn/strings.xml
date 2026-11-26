@@ -577,6 +577,7 @@
     <string name="dns_diagnose_verdict_healthy">DNS looks healthy — the problem is elsewhere.</string>
     <string name="dns_diagnose_verdict_hijacked">DNS is hijacked</string>
     <string name="dns_diagnose_verdict_filtered">Domain is filtered — system DNS returns the filtering address.</string>
+    <string name="dns_diagnose_verdict_filtered_no_doh">No DoH endpoint answered, so the real address is still unknown. The filtering address alone proves the domain is filtered, but there is no trusted IP to connect to yet.</string>
     <string name="dns_diagnose_verdict_hijacked_evidence">System DNS said %1$s, but direct DoH says %2$s.</string>
     <string name="dns_diagnose_verdict_unresolvable">The domain does not resolve at all.</string>
     <string name="dns_diagnose_verdict_doh_unreachable">Even DoH does not answer.</string>

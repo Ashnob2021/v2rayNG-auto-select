@@ -22,7 +22,10 @@ enum class DnsResolver(
 ) {
     SYSTEM("System DNS", null),
     DOH_1_1_1_1("DoH 1.1.1.1", "https://1.1.1.1/dns-query"),
+    DOH_1_0_0_1("DoH 1.0.0.1", "https://1.0.0.1/dns-query"),
     DOH_8_8_8_8("DoH 8.8.8.8", "https://8.8.8.8/dns-query"),
+    DOH_8_8_4_4("DoH 8.8.4.4", "https://8.8.4.4/dns-query"),
+    DOH_9_9_9_9("DoH 9.9.9.9", "https://9.9.9.9/dns-query"),
     DOH_CLOUDFLARE("DoH cloudflare-dns.com", "https://cloudflare-dns.com/dns-query"),
 }
 
