@@ -591,7 +591,7 @@
     <string name="dns_diagnose_revert_note">The original profile is untouched; reverting just clears the flag.</string>
     <string name="dns_diagnose_retest">Test again</string>
     <string name="dns_diagnose_testing">Testing…</string>
-    <string name="dns_diagnose_fix_verified">Fix verified: direct DoH resolves the domain.</string>
+    <string name="dns_diagnose_fix_verified">Fix verified: the generated config routes this domain through direct DoH.</string>
     <string name="dns_diagnose_restart_note">If this config is connected right now, reconnect once for the fix to take effect.</string>
     <string name="dns_diagnose_no_domain">This config has no domain, so DNS plays no part.</string>
     <string name="dns_diagnose_no_profile">Config not found.</string>

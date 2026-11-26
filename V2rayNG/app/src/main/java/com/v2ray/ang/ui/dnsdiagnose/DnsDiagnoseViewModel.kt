@@ -3,6 +3,7 @@ package com.v2ray.ang.ui.dnsdiagnose
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.v2ray.ang.R
+import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.ui.base.BaseViewModel
@@ -53,6 +54,10 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 )
             }
             runProbes()
+            if (profile.directDohEnabled) {
+                val verified = verifyAppliedFix()
+                _uiState.update { it.copy(fixVerified = verified) }
+            }
         }
     }
 
@@ -70,7 +75,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         probeJob?.cancel()
         probeJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
-                it.copy(probing = true, rows = emptyList(), verdict = null, fixVerified = false)
+                it.copy(probing = true, rows = emptyList(), verdict = null)
             }
             var results = DnsProbe.probeDomain(domain, app)
             var evaluation = evaluateVerdict(results)
@@ -79,13 +84,11 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 results = DnsProbe.probeDomain(domain, app)
                 evaluation = evaluateVerdict(results)
             }
-            val flagOn = _uiState.value.flagOn
             _uiState.update {
                 it.copy(
                     probing = false,
                     rows = results,
                     verdict = evaluation.verdict,
-                    fixVerified = isFixVerified(flagOn, results)
                 )
             }
         }
@@ -98,9 +101,10 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 val updated = profile.copy(directDohEnabled = true)
                 MmkvManager.encodeServerConfig(_uiState.value.guid, updated)
                 currentProfile = updated
+                val verified = verifyAppliedFix()
                 withContext(Dispatchers.Main) {
                     _uiState.update {
-                        it.copy(flagOn = true, fixVerified = isFixVerified(true, it.rows))
+                        it.copy(flagOn = true, fixVerified = verified)
                     }
                     toastSuccess(R.string.dns_diagnose_applied)
                 }
@@ -134,16 +138,22 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
     }
 
     /**
-     * The fix is verified when the flag is on and the direct DoH row
-     * (1.1.1.1, the same endpoint the fix uses) resolves the domain.
-     *
-     * Note: re-testing measures the network, which stays hijacked — the
-     * network verdict does not flip to healthy. This line only confirms
-     * the fix's own mechanism works.
+     * Verify the fix against the generated runtime config, not the probe
+     * rows: the probes resolve through DoH directly, whether or not the
+     * fix was ever applied, so they cannot prove the fix is in effect.
+     * Re-testing measures the network, which stays hijacked — the network
+     * verdict does not flip to healthy.
      */
-    private fun isFixVerified(flagOn: Boolean, results: List<DnsProbeResult>): Boolean {
-        if (!flagOn) return false
-        val doh = results.firstOrNull { it.resolver == DnsResolver.DOH_1_1_1_1 }
-        return doh?.ips != null && doh.ips.isNotEmpty()
+    private suspend fun verifyAppliedFix(): Boolean {
+        return try {
+            val guid = _uiState.value.guid
+            if (guid.isEmpty()) return false
+            val result = withContext(Dispatchers.IO) { CoreConfigManager.getV2rayConfig(app, guid) }
+            if (!result.status) return false
+            isDirectDohAppliedInConfig(result.content, _uiState.value.domain)
+        } catch (e: Exception) {
+            LogUtil.e("DnsDiagnose", "verifyAppliedFix failed: ${e.message}")
+            false
+        }
     }
 }
