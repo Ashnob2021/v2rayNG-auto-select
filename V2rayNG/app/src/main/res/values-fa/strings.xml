@@ -583,7 +583,7 @@
     <string name="dns_diagnose_verdict_doh_unreachable">حتی DoH هم جواب نمی‌دهد.</string>
     <string name="dns_diagnose_verdict_system_failed">ریزالور سیستم جواب نمی‌دهد، ولی DoH مستقیم کار می‌کند.</string>
     <string name="dns_diagnose_fix_title">راه‌حل: DoH مستقیم برای همین دامنه</string>
-    <string name="dns_diagnose_fix_note">سؤال DNS رمزنگاری‌شده و مستقیم از 1.1.1.1 پرسیده می‌شود؛ دیگر UDP مسموم جواب نمی‌دهد.</string>
+    <string name="dns_diagnose_fix_note">سؤال DNS رمزنگاری‌شده و مستقیم از چند DoH پرسیده می‌شود؛ اگر یکی جواب نداد، سراغ بعدی می‌رود. دیگر UDP مسموم جواب نمی‌دهد.</string>
     <string name="dns_diagnose_fix_filtered_note">DoH مستقیم DNS را درست می‌کند، ولی SNI هم فیلتر است — برای رسیدن به این سرور fragment هم لازم است.</string>
     <string name="dns_diagnose_fix_filtered_no_doh_note">در این دور هیچ DoHای جواب نداد، پس اعمال کردنش یه امتحانه: DoH روی این شبکه ناپایداره، اعمال کردنش چیزی از دست نمی‌ده، و اگه باز هم وصل نشد می‌تونی برگردونی.</string>
     <string name="dns_diagnose_apply">اعمال DoH مستقیم</string>

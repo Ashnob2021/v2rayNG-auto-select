@@ -150,6 +150,19 @@ object AppConfig {
     const val DNS_PROXY = "https://cloudflare-dns.com/dns-query"
     const val DNS_DIRECT = "223.5.5.5"
     const val DNS_DIRECT_DOH = "https://1.1.1.1/dns-query"
+
+    /** Every DoH endpoint the direct-DoH fix writes into the generated
+     *  config for a flagged domain. IP-based only, from different
+     *  operators, so no hostname has to be resolved first: the core
+     *  tries them in order and falls back to the next one when one
+     *  does not answer, so the fix no longer depends on 1.1.1.1 alone. */
+    val DIRECT_DOH_ADDRESSES = listOf(
+        DNS_DIRECT_DOH,
+        "https://1.0.0.1/dns-query",
+        "https://8.8.8.8/dns-query",
+        "https://8.8.4.4/dns-query",
+        "https://9.9.9.9/dns-query",
+    )
     const val DNS_VPN = "1.1.1.1"
     const val GEOSITE_PRIVATE = "geosite:private"
     const val GEOSITE_CN = "geosite:cn"

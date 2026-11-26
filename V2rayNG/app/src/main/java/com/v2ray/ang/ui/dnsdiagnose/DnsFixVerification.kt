@@ -26,7 +26,8 @@ fun isDirectDohAppliedInConfig(configJson: String?, domain: String): Boolean {
             if (!server.isJsonObject) return@any false
             val obj = server.asJsonObject
             if (obj.get("tag")?.takeIf { it.isJsonPrimitive }?.asString != AppConfig.TAG_DIRECT_DOH) return@any false
-            if (obj.get("address")?.takeIf { it.isJsonPrimitive }?.asString != AppConfig.DNS_DIRECT_DOH) return@any false
+            val address = obj.get("address")?.takeIf { it.isJsonPrimitive }?.asString ?: return@any false
+            if (address !in AppConfig.DIRECT_DOH_ADDRESSES) return@any false
             val domains = obj.get("domains")?.takeIf { it.isJsonArray }?.asJsonArray ?: return@any false
             domains.any { it.isJsonPrimitive && it.asString.lowercase() == "full:$domainLower" }
         }

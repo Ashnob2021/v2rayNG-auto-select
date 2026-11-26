@@ -59,10 +59,32 @@ class DnsFixVerificationTest {
     }
 
     @Test
-    fun `config with a different doh address is not verified`() {
-        assertFalse(
+    fun `config with another known doh address is verified`() {
+        assertTrue(
             isDirectDohAppliedInConfig(
                 config(servers = """{"address": "https://8.8.8.8/dns-query", "domains": ["full:nlp.dandev.de5.net"], "tag": "direct-doh"}"""),
+                "nlp.dandev.de5.net"
+            )
+        )
+    }
+
+    @Test
+    fun `config with several direct doh servers is verified`() {
+        assertTrue(
+            isDirectDohAppliedInConfig(
+                config(
+                    servers = """{"address": "https://1.1.1.1/dns-query", "domains": ["full:nlp.dandev.de5.net"], "tag": "direct-doh"}, {"address": "https://9.9.9.9/dns-query", "domains": ["full:nlp.dandev.de5.net"], "tag": "direct-doh"}"""
+                ),
+                "nlp.dandev.de5.net"
+            )
+        )
+    }
+
+    @Test
+    fun `config with an unknown doh address is not verified`() {
+        assertFalse(
+            isDirectDohAppliedInConfig(
+                config(servers = """{"address": "https://dns.example.com/dns-query", "domains": ["full:nlp.dandev.de5.net"], "tag": "direct-doh"}"""),
                 "nlp.dandev.de5.net"
             )
         )

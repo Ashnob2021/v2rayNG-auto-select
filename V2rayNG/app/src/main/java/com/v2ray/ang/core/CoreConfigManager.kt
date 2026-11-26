@@ -869,15 +869,20 @@ object CoreConfigManager {
     ) {
         val servers = ArrayList<Any>()
         if (directDohDomains.isNotEmpty()) {
-            // Direct DoH for flagged profiles: first in the list, so it is
-            // consulted before the catch-all remote entries below.
-            servers.add(
-                V2rayConfig.DnsBean.ServersBean(
-                    address = AppConfig.DNS_DIRECT_DOH,
-                    domains = directDohDomains.map { "full:$it" },
-                    tag = AppConfig.TAG_DIRECT_DOH
+            // Direct DoH for flagged profiles: first in the list, so they
+            // are consulted before the catch-all remote entries below.
+            // One entry per endpoint, all with the same tag: the core
+            // falls back to the next endpoint when one does not answer,
+            // so the fix no longer depends on 1.1.1.1 alone.
+            AppConfig.DIRECT_DOH_ADDRESSES.forEach { address ->
+                servers.add(
+                    V2rayConfig.DnsBean.ServersBean(
+                        address = address,
+                        domains = directDohDomains.map { "full:$it" },
+                        tag = AppConfig.TAG_DIRECT_DOH
+                    )
                 )
-            )
+            }
         }
         val remoteDns = SettingsManager.getRemoteDnsServers()
         val domesticDns = SettingsManager.getDomesticDnsServers()
