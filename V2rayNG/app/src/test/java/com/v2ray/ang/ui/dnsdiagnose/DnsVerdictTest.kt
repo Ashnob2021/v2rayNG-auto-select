@@ -40,7 +40,7 @@ class DnsVerdictTest {
     }
 
     @Test
-    fun `private system ip is hijacked without retry`() {
+    fun `filtering sinkhole ip is filtered without retry`() {
         val results = listOf(
             ok(DnsResolver.SYSTEM, "10.10.34.35"),
             ok(DnsResolver.DOH_1_1_1_1, "93.184.216.34"),
@@ -48,9 +48,37 @@ class DnsVerdictTest {
             ok(DnsResolver.DOH_CLOUDFLARE, "93.184.216.34"),
         )
         val evaluation = evaluateVerdict(results)
-        assertEquals(DnsVerdictKind.HIJACKED, evaluation.verdict.kind)
+        assertEquals(DnsVerdictKind.FILTERED, evaluation.verdict.kind)
         assertFalse(evaluation.needsRetry)
         assertEquals(listOf("10.10.34.35"), evaluation.verdict.systemIps)
+        assertEquals(listOf("93.184.216.34"), evaluation.verdict.dohIps)
+    }
+
+    @Test
+    fun `other filtering sinkhole ip is filtered without retry`() {
+        val results = listOf(
+            ok(DnsResolver.SYSTEM, "10.10.34.34"),
+            ok(DnsResolver.DOH_1_1_1_1, "93.184.216.34"),
+            ok(DnsResolver.DOH_8_8_8_8, "93.184.216.34"),
+            ok(DnsResolver.DOH_CLOUDFLARE, "93.184.216.34"),
+        )
+        val evaluation = evaluateVerdict(results)
+        assertEquals(DnsVerdictKind.FILTERED, evaluation.verdict.kind)
+        assertFalse(evaluation.needsRetry)
+    }
+
+    @Test
+    fun `private system ip is hijacked without retry`() {
+        val results = listOf(
+            ok(DnsResolver.SYSTEM, "10.0.0.1"),
+            ok(DnsResolver.DOH_1_1_1_1, "93.184.216.34"),
+            ok(DnsResolver.DOH_8_8_8_8, "93.184.216.34"),
+            ok(DnsResolver.DOH_CLOUDFLARE, "93.184.216.34"),
+        )
+        val evaluation = evaluateVerdict(results)
+        assertEquals(DnsVerdictKind.HIJACKED, evaluation.verdict.kind)
+        assertFalse(evaluation.needsRetry)
+        assertEquals(listOf("10.0.0.1"), evaluation.verdict.systemIps)
         assertEquals(listOf("93.184.216.34"), evaluation.verdict.dohIps)
     }
 
@@ -104,6 +132,16 @@ class DnsVerdictTest {
         val evaluation = evaluateVerdict(results)
         assertEquals(DnsVerdictKind.DOH_UNREACHABLE, evaluation.verdict.kind)
         assertFalse(evaluation.needsRetry)
+    }
+
+    @Test
+    fun `filtering sinkhole detection`() {
+        assertTrue(isFilteringIp("10.10.34.35"))
+        assertTrue(isFilteringIp("10.10.34.34"))
+        assertTrue(isFilteringIp(" 10.10.34.35 "))
+        assertFalse(isFilteringIp("10.0.0.1"))
+        assertFalse(isFilteringIp("10.10.34.36"))
+        assertFalse(isFilteringIp("93.184.216.34"))
     }
 
     @Test

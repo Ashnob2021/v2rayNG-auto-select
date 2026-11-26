@@ -574,12 +574,14 @@
     <string name="dns_diagnose_verdict_title">Verdict</string>
     <string name="dns_diagnose_verdict_healthy">DNS looks healthy — the problem is elsewhere.</string>
     <string name="dns_diagnose_verdict_hijacked">DNS is hijacked</string>
+    <string name="dns_diagnose_verdict_filtered">Domain is filtered — system DNS returns the filtering address.</string>
     <string name="dns_diagnose_verdict_hijacked_evidence">System DNS said %1$s, but direct DoH says %2$s.</string>
     <string name="dns_diagnose_verdict_unresolvable">The domain does not resolve at all.</string>
     <string name="dns_diagnose_verdict_doh_unreachable">Even DoH does not answer.</string>
     <string name="dns_diagnose_verdict_system_failed">The system resolver answers nothing, but direct DoH works.</string>
     <string name="dns_diagnose_fix_title">Fix: direct DoH for this domain</string>
     <string name="dns_diagnose_fix_note">DNS questions are asked encrypted, directly from 1.1.1.1 — poisoned UDP no longer answers.</string>
+    <string name="dns_diagnose_fix_filtered_note">Direct DoH fixes DNS, but the SNI is filtered too — fragment is also needed to reach this server.</string>
     <string name="dns_diagnose_apply">Apply direct DoH</string>
     <string name="dns_diagnose_applied">Direct DoH applied</string>
     <string name="dns_diagnose_revert">Revert to before</string>

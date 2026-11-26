@@ -138,7 +138,7 @@ private fun DnsDiagnoseContent(
             fontWeight = FontWeight.Bold,
         )
         Text(text = verdictText(verdict), style = MaterialTheme.typography.bodyLarge)
-        if (verdict.kind == DnsVerdictKind.HIJACKED) {
+        if (verdict.kind == DnsVerdictKind.HIJACKED || verdict.kind == DnsVerdictKind.FILTERED) {
             Text(
                 text = stringResource(
                     R.string.dns_diagnose_verdict_hijacked_evidence,
@@ -152,6 +152,7 @@ private fun DnsDiagnoseContent(
 
     // Fix: only offered when the system resolver is the problem.
     val showFix = state.verdict?.kind == DnsVerdictKind.HIJACKED ||
+        state.verdict?.kind == DnsVerdictKind.FILTERED ||
         state.verdict?.kind == DnsVerdictKind.SYSTEM_DNS_FAILED
     if (showFix) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -167,6 +168,13 @@ private fun DnsDiagnoseContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (state.verdict?.kind == DnsVerdictKind.FILTERED) {
+            Text(
+                text = stringResource(R.string.dns_diagnose_fix_filtered_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         if (!state.flagOn) {
             Button(
@@ -265,6 +273,7 @@ private fun verdictText(verdict: DnsVerdict): String {
     return when (verdict.kind) {
         DnsVerdictKind.HEALTHY -> stringResource(R.string.dns_diagnose_verdict_healthy)
         DnsVerdictKind.HIJACKED -> stringResource(R.string.dns_diagnose_verdict_hijacked)
+        DnsVerdictKind.FILTERED -> stringResource(R.string.dns_diagnose_verdict_filtered)
         DnsVerdictKind.UNRESOLVABLE -> stringResource(R.string.dns_diagnose_verdict_unresolvable)
         DnsVerdictKind.DOH_UNREACHABLE -> stringResource(R.string.dns_diagnose_verdict_doh_unreachable)
         DnsVerdictKind.SYSTEM_DNS_FAILED -> stringResource(R.string.dns_diagnose_verdict_system_failed)

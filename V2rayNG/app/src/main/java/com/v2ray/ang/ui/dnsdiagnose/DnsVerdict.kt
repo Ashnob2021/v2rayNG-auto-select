@@ -12,6 +12,12 @@ enum class DnsVerdictKind {
      *  do not overlap with the DoH answers at all. */
     HIJACKED,
 
+    /** The system resolver returns the known filtering sinkhole
+     *  (10.10.34.34 / 10.10.34.35): the domain is filtered, not merely
+     *  hijacked. Direct DoH fixes DNS, but the SNI is filtered too, so a
+     *  fragment is also needed to reach the server. */
+    FILTERED,
+
     /** Nothing answered: neither the system resolver nor any DoH endpoint. */
     UNRESOLVABLE,
 
@@ -65,6 +71,12 @@ fun evaluateVerdict(results: List<DnsProbeResult>): VerdictEvaluation {
             needsRetry = false
         )
     }
+    if (systemIps.any { isFilteringIp(it) }) {
+        return VerdictEvaluation(
+            DnsVerdict(DnsVerdictKind.FILTERED, systemIps = systemIps, dohIps = dohIps),
+            needsRetry = false
+        )
+    }
     if (systemIps.any { isBogonIp(it) }) {
         return VerdictEvaluation(
             DnsVerdict(DnsVerdictKind.HIJACKED, systemIps = systemIps, dohIps = dohIps),
@@ -88,6 +100,17 @@ fun evaluateVerdict(results: List<DnsProbeResult>): VerdictEvaluation {
         DnsVerdict(DnsVerdictKind.HIJACKED, systemIps = systemIps, dohIps = dohIps),
         needsRetry = true
     )
+}
+
+/**
+ * True for the known filtering sinkhole addresses: when the system
+ * resolver returns one of these for a public domain, the domain is
+ * filtered (for example, pages.dev on Iranian networks returns
+ * 10.10.34.35). This is a subset of [isBogonIp] and must be checked
+ * first, so a filtered domain is not reported as a generic hijack.
+ */
+fun isFilteringIp(ip: String): Boolean {
+    return ip.trim() == "10.10.34.34" || ip.trim() == "10.10.34.35"
 }
 
 /**
