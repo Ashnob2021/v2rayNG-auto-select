@@ -192,6 +192,19 @@ private fun DnsDiagnoseContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (state.verdict?.kind == DnsVerdictKind.FILTERED &&
+            state.verdict?.dohIps.isNullOrEmpty() == true
+        ) {
+            // The probes are one snapshot with a short timeout; DoH on a
+            // filtered network is flaky, and the fix is free to try and
+            // one tap to revert — so it is offered even when no DoH
+            // endpoint answered in this round.
+            Text(
+                text = stringResource(R.string.dns_diagnose_fix_filtered_no_doh_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         if (!state.flagOn) {
             Button(

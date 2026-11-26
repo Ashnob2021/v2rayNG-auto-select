@@ -583,6 +583,7 @@
     <string name="dns_diagnose_fix_title">Fix: direct DoH for this domain</string>
     <string name="dns_diagnose_fix_note">DNS questions are asked encrypted, directly from 1.1.1.1 — poisoned UDP no longer answers.</string>
     <string name="dns_diagnose_fix_filtered_note">Direct DoH fixes DNS, but the SNI is filtered too — fragment is also needed to reach this server.</string>
+    <string name="dns_diagnose_fix_filtered_no_doh_note">No DoH endpoint answered in this round, so applying is a try: DoH on this network is flaky, applying costs nothing, and you can revert if it still does not connect.</string>
     <string name="dns_diagnose_apply">Apply direct DoH</string>
     <string name="dns_diagnose_applied">Direct DoH applied</string>
     <string name="dns_diagnose_revert">Revert to before</string>
