@@ -150,6 +150,14 @@ private fun DnsDiagnoseContent(
         }
     }
 
+    // TCP, SNI and TLS: run after DNS, against the IP DNS trusted.
+    if (!state.probing && state.verdict != null) {
+        Spacer(modifier = Modifier.height(16.dp))
+        ItemDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        ConnectionSection(state = state)
+    }
+
     // Fix: only offered when the system resolver is the problem.
     val showFix = state.verdict?.kind == DnsVerdictKind.HIJACKED ||
         state.verdict?.kind == DnsVerdictKind.FILTERED ||
@@ -228,6 +236,140 @@ private fun DnsDiagnoseContent(
         Text(text = stringResource(R.string.dns_diagnose_retest))
     }
     Spacer(modifier = Modifier.height(24.dp))
+}
+
+@Composable
+private fun ConnectionSection(state: DnsDiagnoseUiState) {
+    Text(
+        text = stringResource(R.string.conn_diagnose_title),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    val tcp = state.tcp
+    if (tcp == null) {
+        Text(
+            text = stringResource(R.string.conn_diagnose_skipped),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        return
+    }
+    // TCP row.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (tcp.outcome == TcpOutcome.CONNECTED) "✓" else "✕",
+            color = if (tcp.outcome == TcpOutcome.CONNECTED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(end = 8.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "TCP ${tcp.ip}:${tcp.port}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(text = tcpOutcomeText(tcp.outcome), style = MaterialTheme.typography.bodySmall)
+        }
+        tcp.latencyMs?.let { latency ->
+            Text(text = "$latency ms", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    // TLS rows: only the SNI varies between them.
+    state.tls.forEach { result ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (reachedServer(result)) "✓" else "✕",
+                color = if (reachedServer(result)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = tlsVariantText(result),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(text = tlsOutcomeText(result.outcome), style = MaterialTheme.typography.bodySmall)
+                if (result.tlsVersion != null || result.negotiatedAlpn != null) {
+                    Text(
+                        text = listOfNotNull(result.tlsVersion, result.negotiatedAlpn).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                result.peerCertSubject?.let { subject ->
+                    Text(
+                        text = subject,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            result.latencyMs?.let { latency ->
+                Text(text = "$latency ms", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    // SNI verdict.
+    when (state.sniVerdict) {
+        SniVerdictKind.NOT_BLOCKED -> Text(
+            text = stringResource(R.string.conn_diagnose_sni_ok),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        SniVerdictKind.FILTERED -> Text(
+            text = stringResource(R.string.conn_diagnose_sni_filtered),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        SniVerdictKind.TLS_BLOCKED -> Text(
+            text = stringResource(R.string.conn_diagnose_tls_blocked),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        SniVerdictKind.SKIPPED, null -> Unit
+    }
+    if (state.tls.isNotEmpty()) {
+        Text(
+            text = stringResource(R.string.conn_diagnose_fingerprint_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun tcpOutcomeText(outcome: TcpOutcome): String {
+    return when (outcome) {
+        TcpOutcome.CONNECTED -> stringResource(R.string.conn_diagnose_tcp_ok)
+        TcpOutcome.TIMEOUT -> stringResource(R.string.dns_diagnose_error_timeout)
+        TcpOutcome.REFUSED -> stringResource(R.string.conn_diagnose_tcp_refused)
+        TcpOutcome.RESET -> stringResource(R.string.conn_diagnose_tcp_reset)
+        TcpOutcome.NETWORK -> stringResource(R.string.dns_diagnose_error_network)
+    }
+}
+
+@Composable
+private fun tlsVariantText(result: TlsProbeResult): String {
+    return when (result.variant) {
+        TlsProbeVariant.REAL_SNI -> stringResource(R.string.conn_diagnose_sni_real, result.sni.orEmpty())
+        TlsProbeVariant.HARMLESS_SNI -> stringResource(R.string.conn_diagnose_sni_harmless)
+        TlsProbeVariant.NO_SNI -> stringResource(R.string.conn_diagnose_sni_none)
+    }
+}
+
+@Composable
+private fun tlsOutcomeText(outcome: TlsOutcome): String {
+    return when (outcome) {
+        TlsOutcome.HANDSHAKE_OK -> stringResource(R.string.conn_diagnose_handshake_ok)
+        TlsOutcome.HANDSHAKE_FAILED -> stringResource(R.string.conn_diagnose_handshake_failed)
+        TlsOutcome.TIMEOUT -> stringResource(R.string.dns_diagnose_error_timeout)
+        TlsOutcome.RESET -> stringResource(R.string.conn_diagnose_tcp_reset)
+        TlsOutcome.NETWORK -> stringResource(R.string.dns_diagnose_error_network)
+    }
 }
 
 @Composable

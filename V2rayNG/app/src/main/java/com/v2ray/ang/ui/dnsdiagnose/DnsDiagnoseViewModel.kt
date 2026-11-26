@@ -2,6 +2,7 @@ package com.v2ray.ang.ui.dnsdiagnose
 
 import android.app.Application
 import androidx.lifecycle.viewModelScope
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.dto.entities.ProfileItem
@@ -75,7 +76,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         probeJob?.cancel()
         probeJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
-                it.copy(probing = true, rows = emptyList(), verdict = null)
+                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null)
             }
             var results = DnsProbe.probeDomain(domain, app)
             var evaluation = evaluateVerdict(results)
@@ -86,9 +87,17 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
             }
             _uiState.update {
                 it.copy(
-                    probing = false,
                     rows = results,
                     verdict = evaluation.verdict,
+                )
+            }
+            val connection = runConnectionProbes(results, evaluation.verdict)
+            _uiState.update {
+                it.copy(
+                    probing = false,
+                    tcp = connection?.tcp,
+                    tls = connection?.tls.orEmpty(),
+                    sniVerdict = connection?.sniVerdict,
                 )
             }
         }
@@ -135,6 +144,32 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 }
             }
         }
+    }
+
+    /**
+     * TCP, then SNI/TLS, against the IP the DNS stage trusted. Runs only
+     * when the DNS stage produced an IP to dial and the profile has a
+     * port. TLS handshakes run only for TLS/REALITY configs; for anything
+     * else the TCP result alone is reported.
+     */
+    private suspend fun runConnectionProbes(
+        results: List<DnsProbeResult>,
+        verdict: DnsVerdict?,
+    ): ConnectionProbeResult? {
+        val profile = currentProfile ?: return null
+        val ip = pickProbeIp(results, verdict) ?: return null
+        val port = profile.serverPort?.trim()?.toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
+        val domain = _uiState.value.domain
+        if (domain.isEmpty()) return null
+        val tlsApplicable = AppConfig.TLS.equals(profile.security, ignoreCase = true) ||
+            AppConfig.REALITY.equals(profile.security, ignoreCase = true)
+        if (!tlsApplicable) {
+            val tcp = TlsProbe.probeTcp(ip, port)
+            return ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED)
+        }
+        val realSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+        val alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        return TlsProbe.probeConnection(ip, port, realSni, alpn)
     }
 
     /**
