@@ -64,14 +64,15 @@ object DnsProbe {
         if (resolvers.isEmpty()) {
             return DnsProbeResult(DnsResolver.SYSTEM, null, null, ProbeError.NO_RESOLVER)
         }
-        // The servers actually asked: the DNS servers the active network
-        // assigned (usually the ISP's). Shown under the System DNS row so
-        // the user can see whose resolvers answered.
-        val queriedServers = resolvers.take(UDP_MAX_ATTEMPTS).map { it.hostAddress }
         val queryId = Random.nextInt(1, 0xFFFF)
         val query = DnsWireCodec.buildQuery(domain, queryId)
         var lastError = ProbeError.TIMEOUT
+        // Only the servers actually asked in this round: the probe stops
+        // at the first answer — even a poisoned one — and tries the next
+        // server only when the previous one times out.
+        val triedServers = mutableListOf<String>()
         for (resolver in resolvers.take(UDP_MAX_ATTEMPTS)) {
+            triedServers += resolver.hostAddress
             try {
                 DatagramSocket().use { socket ->
                     socket.soTimeout = UDP_TIMEOUT_MS
@@ -83,20 +84,20 @@ object DnsProbe {
                     val latency = SystemClock.elapsedRealtime() - start
                     val ips = DnsWireCodec.parseResponse(packet.data.copyOf(packet.length), queryId)
                     if (ips == null) {
-                        return DnsProbeResult(DnsResolver.SYSTEM, null, latency, ProbeError.BAD_RESPONSE, queriedServers)
+                        return DnsProbeResult(DnsResolver.SYSTEM, null, latency, ProbeError.BAD_RESPONSE, triedServers.toList())
                     }
                     if (ips.isEmpty()) {
-                        return DnsProbeResult(DnsResolver.SYSTEM, emptyList(), latency, ProbeError.NO_ANSWER, queriedServers)
+                        return DnsProbeResult(DnsResolver.SYSTEM, emptyList(), latency, ProbeError.NO_ANSWER, triedServers.toList())
                     }
-                    return DnsProbeResult(DnsResolver.SYSTEM, ips, latency, null, queriedServers)
+                    return DnsProbeResult(DnsResolver.SYSTEM, ips, latency, null, triedServers.toList())
                 }
             } catch (e: SocketTimeoutException) {
                 lastError = ProbeError.TIMEOUT
             } catch (e: IOException) {
-                return DnsProbeResult(DnsResolver.SYSTEM, null, null, ProbeError.NETWORK, queriedServers)
+                return DnsProbeResult(DnsResolver.SYSTEM, null, null, ProbeError.NETWORK, triedServers.toList())
             }
         }
-        return DnsProbeResult(DnsResolver.SYSTEM, null, null, lastError, queriedServers)
+        return DnsProbeResult(DnsResolver.SYSTEM, null, null, lastError, triedServers.toList())
     }
 
     private fun probeDoh(domain: String, resolver: DnsResolver, client: OkHttpClient): DnsProbeResult {
