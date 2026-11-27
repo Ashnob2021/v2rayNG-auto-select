@@ -21,10 +21,12 @@ data class DnsDiagnoseUiState(
     val tls: List<TlsProbeResult> = emptyList(),
     val sniVerdict: SniVerdictKind? = null,
     val tlsSkipped: TlsSkippedReason? = null,
+    val coreTest: CoreTestState = CoreTestState.Idle,
 )
 
 sealed interface DnsDiagnoseAction {
     data object Retest : DnsDiagnoseAction
     data object ApplyFix : DnsDiagnoseAction
     data object RevertFix : DnsDiagnoseAction
+    data object TestCore : DnsDiagnoseAction
 }

@@ -620,6 +620,13 @@
     <string name="conn_diagnose_fingerprint_note">The probe uses the phone TLS stack, so it cannot reproduce the profile fingerprint; changing the fingerprint stays a fix to try.</string>
     <string name="conn_diagnose_tls_skipped_reality">TLS probe skipped — this is a REALITY config. A plain TLS handshake is not a REALITY handshake, so it cannot prove anything here.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">TLS probe skipped — this config does not use TLS.</string>
+    <string name="core_test_title">Test through the core</string>
+    <string name="core_test_desc">Runs the real connection through the Xray core, the same way the app connects. This is the final proof the probes cannot give.</string>
+    <string name="core_test_action">Test with the core</string>
+    <string name="core_test_testing">Testing through the core…</string>
+    <string name="core_test_success">Connected through the core in %1$d ms.</string>
+    <string name="core_test_failed">Could not connect through the core.</string>
+    <string name="core_test_no_doh_note">This test uses the speed-test config, which does not include the direct-DoH fix. DNS is covered by the tests above.</string>
     <string name="dns_diagnose_restart_note">If this config is connected right now, reconnect once for the fix to take effect.</string>
     <string name="dns_diagnose_no_domain">This config has no domain, so DNS plays no part.</string>
     <string name="dns_diagnose_no_profile">Config not found.</string>

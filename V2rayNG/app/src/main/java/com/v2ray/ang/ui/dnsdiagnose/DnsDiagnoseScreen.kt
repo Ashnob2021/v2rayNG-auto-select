@@ -271,6 +271,15 @@ private fun DnsDiagnoseContent(
         }
     }
 
+    // Core test: the real connection through the Xray core — the final
+    // proof the probes cannot give. Shown once the probes finished.
+    if (!state.probing && state.verdict != null) {
+        Spacer(modifier = Modifier.height(16.dp))
+        ItemDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        CoreTestSection(state = state, onAction = onAction)
+    }
+
     // Re-test.
     Spacer(modifier = Modifier.height(24.dp))
     OutlinedButton(
@@ -281,6 +290,52 @@ private fun DnsDiagnoseContent(
         Text(text = stringResource(R.string.dns_diagnose_retest))
     }
     Spacer(modifier = Modifier.height(24.dp))
+}
+
+@Composable
+private fun CoreTestSection(state: DnsDiagnoseUiState, onAction: (DnsDiagnoseAction) -> Unit) {
+    Text(
+        text = stringResource(R.string.core_test_title),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    Text(
+        text = stringResource(R.string.core_test_desc),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    when (val coreTest = state.coreTest) {
+        CoreTestState.Idle -> Unit
+        CoreTestState.Testing -> Text(
+            text = stringResource(R.string.core_test_testing),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        is CoreTestState.Success -> Text(
+            text = stringResource(R.string.core_test_success, coreTest.delayMs),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        CoreTestState.Failed -> Text(
+            text = stringResource(R.string.core_test_failed),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Button(
+        onClick = { onAction(DnsDiagnoseAction.TestCore) },
+        enabled = state.coreTest != CoreTestState.Testing,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(text = stringResource(R.string.core_test_action))
+    }
+    if (state.flagOn) {
+        Text(
+            text = stringResource(R.string.core_test_no_doh_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

@@ -4,8 +4,10 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreConfigManager
+import com.v2ray.ang.core.CoreNativeManager
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.ui.base.BaseViewModel
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
@@ -66,6 +68,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
             DnsDiagnoseAction.Retest -> runProbes()
             DnsDiagnoseAction.ApplyFix -> applyFix()
             DnsDiagnoseAction.RevertFix -> revertFix()
+            DnsDiagnoseAction.TestCore -> runCoreTest()
         }
     }
 
@@ -176,6 +179,41 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 val tcp = TlsProbe.probeTcp(ip, port)
                 ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED, TlsSkippedReason.NOT_TLS)
             }
+        }
+    }
+
+    /**
+     * Core test: a real connection through the Xray core, reusing the
+     * app's own delay-test machinery (speed-test config +
+     * [CoreNativeManager.measureOutboundDelay]). The speed-test config
+     * clears the inbounds, so this can run while another config is
+     * connected, and it uses the profile's fingerprint, ALPN and
+     * transport settings — the things the phone-stack probes cannot
+     * reproduce. Runs on IO: the measurement is a blocking JNI call.
+     */
+    private fun runCoreTest() {
+        val guid = _uiState.value.guid
+        if (guid.isEmpty() || _uiState.value.coreTest == CoreTestState.Testing) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(coreTest = CoreTestState.Testing) }
+            val state = try {
+                CoreNativeManager.initCoreEnv(app)
+                val result = CoreConfigManager.getV2rayConfig4Speedtest(app, guid)
+                if (!result.status) {
+                    CoreTestState.Failed
+                } else {
+                    coreTestStateFromDelay(
+                        CoreNativeManager.measureOutboundDelay(
+                            result.content,
+                            SettingsManager.getDelayTestUrl()
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                LogUtil.e("DnsDiagnose", "core test failed: ${e.message}")
+                CoreTestState.Failed
+            }
+            _uiState.update { it.copy(coreTest = state) }
         }
     }
 

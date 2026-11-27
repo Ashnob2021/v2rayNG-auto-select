@@ -612,6 +612,13 @@
     <string name="conn_diagnose_fingerprint_note">پروب از TLS گوشی استفاده می‌کند، پس نمی‌تواند فینگرپرینت پروفایل را بازتولید کند؛ عوض کردن فینگرپرینت هنوز یک راه‌حل قابل امتحان است.</string>
     <string name="conn_diagnose_tls_skipped_reality">پروب TLS رد شد — این یک کانفیگ REALITY است. هندشیک TLS ساده، هندشیک REALITY نیست، پس اینجا هیچی را ثابت نمی‌کند.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">پروب TLS رد شد — این کانفیگ از TLS استفاده نمی‌کند.</string>
+    <string name="core_test_title">تست از طریق کور</string>
+    <string name="core_test_desc">اتصال واقعی را از طریق کور Xray اجرا می‌کند، همان‌طور که خود اپ وصل می‌شود. این اثبات نهایی است که پروب‌ها نمی‌توانند بدهند.</string>
+    <string name="core_test_action">تست با کور</string>
+    <string name="core_test_testing">در حال تست از طریق کور…</string>
+    <string name="core_test_success">از طریق کور وصل شد در %1$d میلی‌ثانیه.</string>
+    <string name="core_test_failed">از طریق کور وصل نشد.</string>
+    <string name="core_test_no_doh_note">این تست از کانفیگ تست سرعت استفاده می‌کند که فیکس direct-DoH را ندارد. DNS با تست‌های بالا پوشش داده شده است.</string>
     <string name="dns_diagnose_restart_note">اگر این کانفیگ همین حالا وصل است، برای اثر کردن راه‌حل اتصال را یک بار قطع و وصل کنید.</string>
     <string name="dns_diagnose_no_domain">این کانفیگ دامنه ندارد؛ DNS دخالتی ندارد.</string>
     <string name="dns_diagnose_no_profile">کانفیگ پیدا نشد.</string>
