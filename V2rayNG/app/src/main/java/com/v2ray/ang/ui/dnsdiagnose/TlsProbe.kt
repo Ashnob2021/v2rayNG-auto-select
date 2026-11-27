@@ -284,7 +284,8 @@ fun evaluateSniVerdict(
  * all-lowercase SNI gets the first letter of each label capitalized.
  * Pure logic, covered by unit tests.
  */
-fun alterSniCase(sni: String): String {
+fun alterSniCase(sni: String?): String? {
+    if (sni == null) return null
     if (sni.any { it.isUpperCase() }) return sni.lowercase()
     return sni.split(".").joinToString(".") { label ->
         label.replaceFirstChar { it.uppercaseChar() }

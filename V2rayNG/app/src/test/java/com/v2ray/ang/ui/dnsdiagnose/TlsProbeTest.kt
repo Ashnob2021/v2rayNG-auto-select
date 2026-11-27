@@ -131,6 +131,11 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `null sni stays null`() {
+        assertNull(alterSniCase(null))
+    }
+
+    @Test
     fun `case variant reaching while real sni fails means case sensitive filtering`() {
         assertEquals(
             SniVerdictKind.CASE_SENSITIVE,
