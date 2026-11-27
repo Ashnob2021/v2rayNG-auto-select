@@ -267,15 +267,19 @@ fun evaluateSniVerdict(
     // whatever the other variants did.
     if (real.outcome == TlsOutcome.HANDSHAKE_OK) return SniVerdictKind.NOT_BLOCKED
     // The real SNI's handshake failed but the same SNI with different
-    // letter case completes: the filter matches case-sensitively. This
-    // check runs before "reached" below, because a handshake that fails
-    // after ServerHello is itself the blocking.
+    // letter case reaches the server: the filter matches
+    // case-sensitively. This check runs before the harmless/no-SNI
+    // check below, because a handshake that fails after ServerHello is
+    // itself the blocking.
     if (caseSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.CASE_SENSITIVE
     }
-    // The SNI reached the server (it answered, then the handshake
-    // failed): the SNI itself is not blocked.
-    if (reachedServer(real)) return SniVerdictKind.NOT_BLOCKED
+    // A handshake that failed after ServerHello is NOT proof the SNI
+    // is fine: the server answered, then the handshake failed — which
+    // is exactly how a filter that disrupts the handshake after reading
+    // the SNI behaves. Only a completed handshake proves the SNI.
+    // So a failed real SNI falls through here: if a harmless SNI or
+    // no SNI reaches the server, the SNI is the problem.
     if (harmless?.let { reachedServer(it) } == true || noSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.FILTERED
     }
@@ -286,6 +290,35 @@ fun evaluateSniVerdict(
         return SniVerdictKind.INCONCLUSIVE
     }
     return SniVerdictKind.TLS_BLOCKED
+}
+
+/**
+ * Whether the diagnose screen should offer the mixed-case SNI fix.
+ * Proven when the verdict is CASE_SENSITIVE: the case variant
+ * completed while the real SNI did not, so the fix is known to work.
+ * Otherwise offered as a try when the probe could not compare the two
+ * SNI forms — the verdict is FILTERED or TLS_BLOCKED, the stored SNI
+ * is all-lowercase (so the variant is the capitalized form that evades
+ * a case-sensitive lowercase match), and the case variant did not
+ * already reach the server and fail (that would be evidence the case
+ * change does not help). INCONCLUSIVE is excluded: no handshake
+ * reached the server at all, so the probe has no information about
+ * the SNI. Pure logic, covered by unit tests.
+ */
+fun shouldOfferSniFix(
+    verdict: SniVerdictKind?,
+    caseSni: TlsProbeResult?,
+    storedSni: String?,
+): Boolean {
+    if (verdict == null ||
+        verdict == SniVerdictKind.SKIPPED ||
+        verdict == SniVerdictKind.NOT_BLOCKED
+    ) return false
+    if (verdict == SniVerdictKind.CASE_SENSITIVE) return true
+    if (verdict != SniVerdictKind.FILTERED && verdict != SniVerdictKind.TLS_BLOCKED) return false
+    if (storedSni.isNullOrBlank() || storedSni.any { it.isUpperCase() }) return false
+    if (caseSni?.outcome == TlsOutcome.HANDSHAKE_FAILED) return false
+    return true
 }
 
 /** A handshake that completed, or one that failed after a ServerHello

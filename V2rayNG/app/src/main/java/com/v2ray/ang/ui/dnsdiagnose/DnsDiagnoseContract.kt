@@ -21,6 +21,7 @@ data class DnsDiagnoseUiState(
     val tcp: TcpProbeResult? = null,
     val tls: List<TlsProbeResult> = emptyList(),
     val sniVerdict: SniVerdictKind? = null,
+    val sniFixOffered: Boolean = false,
     val tlsSkipped: TlsSkippedReason? = null,
     val coreTest: CoreTestState = CoreTestState.Idle,
 )

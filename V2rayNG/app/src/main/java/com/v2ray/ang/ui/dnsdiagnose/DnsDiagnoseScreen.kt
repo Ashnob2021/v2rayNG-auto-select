@@ -254,11 +254,15 @@ private fun DnsDiagnoseContent(
         ConnectionSection(state = state)
     }
 
-    // Fix: only offered when the SNI is filtered case-sensitively.
-    // The applied state and Revert live in the block above the tests
-    // now, so they are reachable whatever the verdict is. This section
-    // only offers Apply when the flag is off.
-    if (!state.probing && state.sniVerdict == SniVerdictKind.CASE_SENSITIVE && !state.sniCaseMixed) {
+    // Fix: offered when the verdict proves the SNI is filtered
+    // case-sensitively (CASE_SENSITIVE), and as a try when the probe
+    // could not compare the two SNI forms but the stored SNI is
+    // all-lowercase, so the capitalized form may evade the filter
+    // (see shouldOfferSniFix). The applied state and Revert live in
+    // the block above the tests now, so they are reachable whatever
+    // the verdict is. This section only offers Apply when the flag
+    // is off.
+    if (!state.probing && state.sniFixOffered && !state.sniCaseMixed) {
         Spacer(modifier = Modifier.height(16.dp))
         ItemDivider()
         Spacer(modifier = Modifier.height(16.dp))
@@ -268,7 +272,13 @@ private fun DnsDiagnoseContent(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = stringResource(R.string.sni_fix_note),
+            text = stringResource(
+                if (state.sniVerdict == SniVerdictKind.CASE_SENSITIVE) {
+                    R.string.sni_fix_note
+                } else {
+                    R.string.sni_fix_try_note
+                }
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -616,6 +616,7 @@
     <string name="sni_fix_apply">اعمال SNI با حروف متفاوت</string>
     <string name="sni_fix_applied">SNI با حروف متفاوت اعمال شد</string>
     <string name="sni_fix_applied_note">اتصال حالا SNI را با حروف متفاوت می‌فرستد، پس فیلترِ حساس به حروف دیگر آن را نمی‌گیرد.</string>
+    <string name="sni_fix_try_note">پروب نتوانست ثابت کند SNI با حروف متفاوت به سرور می‌رسد — مقایسه‌ی دو شکل کامل نشد. امتحانش کن؛ تست هسته نشان می‌دهد کانفیگ با آن وصل می‌شود یا نه.</string>
     <string name="conn_diagnose_fingerprint_note">پروب از TLS گوشی استفاده می‌کند، پس نمی‌تواند فینگرپرینت پروفایل را بازتولید کند؛ عوض کردن فینگرپرینت هنوز یک راه‌حل قابل امتحان است.</string>
     <string name="conn_diagnose_tls_skipped_reality">پروب TLS رد شد — این یک کانفیگ REALITY است. هندشیک TLS ساده، هندشیک REALITY نیست، پس اینجا هیچی را ثابت نمی‌کند.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">پروب TLS رد شد — این کانفیگ از TLS استفاده نمی‌کند.</string>

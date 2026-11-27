@@ -82,7 +82,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         probeJob?.cancel()
         probeJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
-                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null, tlsSkipped = null)
+                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null, sniFixOffered = false, tlsSkipped = null)
             }
             var results = DnsProbe.probeDomain(domain, app)
             var evaluation = evaluateVerdict(results)
@@ -98,6 +98,8 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 )
             }
             val connection = runConnectionProbes(results)
+            val storedSni = currentProfile?.let { storedSniForProbe(it, _uiState.value.domain) }
+            val caseSni = connection?.tls?.firstOrNull { it.variant == TlsProbeVariant.CASE_SNI }
             _uiState.update {
                 it.copy(
                     probing = false,
@@ -105,6 +107,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     tls = connection?.tls.orEmpty(),
                     sniVerdict = connection?.sniVerdict,
                     tlsSkipped = connection?.tlsSkipped,
+                    sniFixOffered = shouldOfferSniFix(connection?.sniVerdict, caseSni, storedSni),
                 )
             }
         }
@@ -203,6 +206,14 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         }
     }
 
+    /** The SNI the probe tests, before any fix is applied: the
+     *  profile's SNI when it is a domain name, else the server domain.
+     *  The fix offer is decided from this stored SNI, not from the
+     *  SNI the probe actually sent (which is the altered form when
+     *  the fix is already on). */
+    private fun storedSniForProbe(profile: ProfileItem, domain: String): String =
+        profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+
     /**
      * TCP, then SNI/TLS, against the IP the DNS stage trusted. Runs only
      * when the DNS stage produced an IP to dial and the profile has a
@@ -221,7 +232,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         if (domain.isEmpty()) return null
         return when (tlsProbeMode(profile.security)) {
             TlsProbeMode.TLS -> {
-                val storedSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+                val storedSni = storedSniForProbe(profile, domain)
                 // When the mixed-case SNI fix is on, the probe tests the
                 // SNI the connection actually sends, not the stored one.
                 val realSni = if (profile.sniCaseMixed) alterSniCase(storedSni) ?: storedSni else storedSni

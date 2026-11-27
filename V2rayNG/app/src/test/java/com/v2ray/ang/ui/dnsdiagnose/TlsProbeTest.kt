@@ -36,14 +36,49 @@ class TlsProbeTest {
     }
 
     @Test
-    fun `real sni handshake failed after serverhello means sni reached the server`() {
+    fun `real sni handshake failed after serverhello without a completing control means tls blocked`() {
         assertTrue(reachedServer(tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED)))
+        // The server answered, then the handshake failed — but no
+        // control completed, so the probe cannot blame the SNI. A
+        // failed handshake after ServerHello is not proof the SNI
+        // is fine: it is exactly how a filter that disrupts the
+        // handshake after reading the SNI behaves.
         assertEquals(
-            SniVerdictKind.NOT_BLOCKED,
+            SniVerdictKind.TLS_BLOCKED,
             evaluateSniVerdict(
                 tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
                 tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.TIMEOUT),
                 tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+            )
+        )
+    }
+
+    @Test
+    fun `real sni failing after serverhello while harmless sni reaches means sni is filtered`() {
+        assertEquals(
+            SniVerdictKind.FILTERED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.TIMEOUT),
+            )
+        )
+    }
+
+    @Test
+    fun `real sni failing after serverhello while the controls fail with network errors means tls blocked`() {
+        // Device run 2026-11-28 02:23, DAN-2053-IP-6: the server
+        // answered the real SNI, then the handshake failed, while the
+        // harmless SNI and the case variant both failed with network
+        // errors and no-SNI was reset. Nothing completed.
+        assertEquals(
+            SniVerdictKind.TLS_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.NETWORK),
             )
         )
     }
@@ -168,6 +203,113 @@ class TlsProbeTest {
                 tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
                 tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
                 tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+            )
+        )
+    }
+
+    @Test
+    fun `case sensitive verdict always offers the sni fix`() {
+        assertTrue(
+            shouldOfferSniFix(
+                SniVerdictKind.CASE_SENSITIVE,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+        // Proven even when the stored SNI is already mixed-case: the
+        // fix then sends the lowercase form, which is the one that
+        // completed.
+        assertTrue(
+            shouldOfferSniFix(
+                SniVerdictKind.CASE_SENSITIVE,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+                "YrUi0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `tls blocked with a lowercase sni and an uncompared case variant offers the sni fix as a try`() {
+        // Device run 2026-11-28 02:23, DAN-2053-IP-6: the case variant
+        // failed with a network error, so the probe never compared the
+        // two forms — but the stored SNI is all-lowercase, so the
+        // capitalized form is worth trying.
+        assertTrue(
+            shouldOfferSniFix(
+                SniVerdictKind.TLS_BLOCKED,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.NETWORK),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `tls blocked with a case variant that failed after serverhello does not offer the sni fix`() {
+        assertFalse(
+            shouldOfferSniFix(
+                SniVerdictKind.TLS_BLOCKED,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `tls blocked with a mixed-case sni does not offer the sni fix`() {
+        // The variant of a mixed-case SNI is the all-lowercase form,
+        // which is the form a case-sensitive lowercase match blocks.
+        assertFalse(
+            shouldOfferSniFix(
+                SniVerdictKind.TLS_BLOCKED,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.NETWORK),
+                "YrUi0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `filtered with a lowercase sni and a timed out case variant offers the sni fix as a try`() {
+        assertTrue(
+            shouldOfferSniFix(
+                SniVerdictKind.FILTERED,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.TIMEOUT),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `inconclusive never offers the sni fix`() {
+        assertFalse(
+            shouldOfferSniFix(
+                SniVerdictKind.INCONCLUSIVE,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.NETWORK),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+    }
+
+    @Test
+    fun `not blocked and skipped never offer the sni fix`() {
+        assertFalse(
+            shouldOfferSniFix(
+                SniVerdictKind.NOT_BLOCKED,
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+        assertFalse(
+            shouldOfferSniFix(
+                SniVerdictKind.SKIPPED,
+                null,
+                "yrui0hd835j2.pages.dev",
+            )
+        )
+        assertFalse(
+            shouldOfferSniFix(
+                null,
+                null,
+                "yrui0hd835j2.pages.dev",
             )
         )
     }

@@ -616,6 +616,7 @@
     <string name="sni_fix_apply">Apply mixed-case SNI</string>
     <string name="sni_fix_applied">Mixed-case SNI applied</string>
     <string name="sni_fix_applied_note">The connection now sends the SNI with mixed letter case, so a case-sensitive filter no longer matches it.</string>
+    <string name="sni_fix_try_note">The probe could not prove the mixed-case SNI reaches the server — the case comparison did not complete. Try it; the core test will show whether the config connects with it.</string>
     <string name="conn_diagnose_fingerprint_note">The probe uses the phone TLS stack, so it cannot reproduce the profile fingerprint; changing the fingerprint stays a fix to try.</string>
     <string name="conn_diagnose_tls_skipped_reality">TLS probe skipped — this is a REALITY config. A plain TLS handshake is not a REALITY handshake, so it cannot prove anything here.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">TLS probe skipped — this config does not use TLS.</string>
