@@ -162,6 +162,9 @@ object AppConfig {
         "https://8.8.8.8/dns-query",
         "https://8.8.4.4/dns-query",
         "https://9.9.9.9/dns-query",
+        "https://149.112.112.112/dns-query",
+        "https://208.67.222.222/dns-query",
+        "https://94.140.14.14/dns-query",
     )
     const val DNS_VPN = "1.1.1.1"
     const val GEOSITE_PRIVATE = "geosite:private"

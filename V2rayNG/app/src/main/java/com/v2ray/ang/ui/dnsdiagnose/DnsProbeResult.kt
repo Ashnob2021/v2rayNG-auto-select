@@ -31,6 +31,13 @@ enum class DnsResolver(
     DOH_8_8_8_8("DoH 8.8.8.8", "https://8.8.8.8/dns-query"),
     DOH_8_8_4_4("DoH 8.8.4.4", "https://8.8.4.4/dns-query"),
     DOH_9_9_9_9("DoH 9.9.9.9", "https://9.9.9.9/dns-query"),
+    // More operators, same purpose: a filtered network blocks DoH
+    // per IP/path, so the biggest endpoints (Cloudflare, Google,
+    // Quad9) are the most likely to be blocked, while a smaller
+    // operator's address may still be reachable.
+    DOH_149_112_112_112("DoH 149.112.112.112", "https://149.112.112.112/dns-query"),
+    DOH_208_67_222_222("DoH 208.67.222.222", "https://208.67.222.222/dns-query"),
+    DOH_94_140_14_14("DoH 94.140.14.14", "https://94.140.14.14/dns-query"),
     DOH_CLOUDFLARE("DoH cloudflare-dns.com", "https://cloudflare-dns.com/dns-query"),
 }
 
