@@ -517,7 +517,19 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
             style = MaterialTheme.typography.bodyLarge,
         )
         SniVerdictKind.CASE_SENSITIVE -> Text(
-            text = stringResource(R.string.conn_diagnose_sni_case_sensitive),
+            // When the fix is on, the probe's "real" row is the
+            // mixed-case SNI and the "case" row is the stored
+            // lowercase SNI, so the plain sentence would read
+            // backwards ("the real SNI is blocked, but the case
+            // variant reaches"). Name no form; say the two forms
+            // behave differently and point at the core test.
+            text = stringResource(
+                if (state.sniCaseMixed) {
+                    R.string.conn_diagnose_sni_case_sensitive_fixed
+                } else {
+                    R.string.conn_diagnose_sni_case_sensitive
+                }
+            ),
             style = MaterialTheme.typography.bodyLarge,
         )
         SniVerdictKind.SKIPPED, null -> Unit

@@ -615,6 +615,7 @@
     <string name="conn_diagnose_sni_inconclusive">The probe could not complete a handshake — every handshake failed with a network error, so this does not prove TLS is blocked.</string>
     <string name="conn_diagnose_sni_case">SNI with different case (%1$s)</string>
     <string name="conn_diagnose_sni_case_sensitive">SNI filtering is case-sensitive — the real SNI is blocked, but the same SNI with different letter case reaches the server.</string>
+    <string name="conn_diagnose_sni_case_sensitive_fixed">SNI filtering is case-sensitive — the two letter-case forms behave differently. The mixed-case SNI fix is on, so the connection sends the mixed-case SNI; the core test below is the proof.</string>
     <string name="sni_fix_title">Fix: mixed-case SNI</string>
     <string name="sni_fix_note">The SNI is filtered case-sensitively: the lowercase form is blocked, but the same SNI with different letter case reaches the server. The fix sends the SNI with mixed letter case, so the filter no longer matches it.</string>
     <string name="sni_fix_apply">Apply mixed-case SNI</string>
