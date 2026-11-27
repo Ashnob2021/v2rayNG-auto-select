@@ -90,7 +90,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     verdict = evaluation.verdict,
                 )
             }
-            val connection = runConnectionProbes(results, evaluation.verdict)
+            val connection = runConnectionProbes(results)
             _uiState.update {
                 it.copy(
                     probing = false,
@@ -156,10 +156,9 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
      */
     private suspend fun runConnectionProbes(
         results: List<DnsProbeResult>,
-        verdict: DnsVerdict?,
     ): ConnectionProbeResult? {
         val profile = currentProfile ?: return null
-        val ip = pickProbeIp(results, verdict) ?: return null
+        val ip = pickProbeIp(results) ?: return null
         val port = profile.serverPort?.trim()?.toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
         val domain = _uiState.value.domain
         if (domain.isEmpty()) return null

@@ -23,9 +23,11 @@ import javax.net.ssl.X509TrustManager
 /**
  * TCP, SNI and TLS probes for one server, run after the DNS stage.
  *
- * The probes dial the IP the DNS stage trusted (a DoH answer when the
- * system resolver is hijacked or filtered) and stop at the TLS handshake:
- * no application data is ever sent. A plain [Socket] first proves the
+ * The probes dial the IP the DNS stage trusted: a DoH answer when one
+ * exists, otherwise the system resolver's answer when it is a plausible
+ * public address. A bogon — including the filtering sinkhole
+ * 10.10.34.34/35 — is never dialled. The probes stop at the TLS
+ * handshake: no application data is ever sent. A plain [Socket] first proves the
  * IP:port is reachable at all; then three TLS handshakes vary only the
  * SNI — the profile's real SNI, a harmless SNI, and no SNI — so a
  * difference between them isolates SNI filtering from a general TLS
@@ -262,17 +264,24 @@ fun reachedServer(result: TlsProbeResult): Boolean {
 
 /**
  * Pick the IP the connection probes dial: a trusted DoH answer first.
- * The system resolver's answer is only used when DNS looks healthy;
- * a hijacked or filtered answer must never be dialled.
+ * When no DoH endpoint answered, the system resolver's answer is the
+ * only candidate: dial it only when it looks like a real public
+ * address. A bogon — including the filtering sinkhole 10.10.34.34/35 —
+ * must never be dialled. This matters on a network that blocks the DoH
+ * endpoints themselves while the system resolver still answers
+ * correctly (for example, speedtest.net on such a network): the domain
+ * is not filtered, DoH is, and skipping TCP/SNI would throw away the
+ * one test that can still run. The verdict no longer gates this
+ * choice: whether the system answer is plausible is decided from the
+ * address itself, not from whether DoH happened to answer.
  * Pure logic, covered by unit tests.
  */
-fun pickProbeIp(results: List<DnsProbeResult>, verdict: DnsVerdict?): String? {
+fun pickProbeIp(results: List<DnsProbeResult>): String? {
     val dohIps = results.filter { it.resolver != DnsResolver.SYSTEM }.flatMap { it.ips.orEmpty() }
     if (dohIps.isNotEmpty()) return dohIps.first()
-    if (verdict?.kind == DnsVerdictKind.HEALTHY) {
-        return results.firstOrNull { it.resolver == DnsResolver.SYSTEM }?.ips?.firstOrNull()
-    }
-    return null
+    return results.firstOrNull { it.resolver == DnsResolver.SYSTEM }
+        ?.ips.orEmpty()
+        .firstOrNull { !isBogonIp(it) }
 }
 
 fun classifyTcpException(e: Exception): TcpOutcome {

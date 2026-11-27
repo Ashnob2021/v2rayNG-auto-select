@@ -104,20 +104,21 @@ class TlsProbeTest {
             dns(DnsResolver.DOH_8_8_8_8, "91.198.77.180"),
             dnsFailed(DnsResolver.DOH_CLOUDFLARE),
         )
-        val verdict = DnsVerdict(DnsVerdictKind.FILTERED, listOf("10.10.34.35"), listOf("91.198.77.180"))
-        assertEquals("91.198.77.180", pickProbeIp(results, verdict))
+        assertEquals("91.198.77.180", pickProbeIp(results))
     }
 
     @Test
-    fun `system ip is used only when dns looks healthy`() {
+    fun `public system ip is used even when no doh endpoint answered`() {
         val results = listOf(
-            dns(DnsResolver.SYSTEM, "93.184.216.34"),
+            dns(DnsResolver.SYSTEM, "104.17.148.22", "104.17.147.22"),
             dnsFailed(DnsResolver.DOH_1_1_1_1),
+            dnsFailed(DnsResolver.DOH_1_0_0_1),
             dnsFailed(DnsResolver.DOH_8_8_8_8),
+            dnsFailed(DnsResolver.DOH_8_8_4_4),
+            dnsFailed(DnsResolver.DOH_9_9_9_9),
             dnsFailed(DnsResolver.DOH_CLOUDFLARE),
         )
-        val verdict = DnsVerdict(DnsVerdictKind.HEALTHY, listOf("93.184.216.34"), listOf("93.184.216.34"))
-        assertEquals("93.184.216.34", pickProbeIp(results, verdict))
+        assertEquals("104.17.148.22", pickProbeIp(results))
     }
 
     @Test
@@ -128,8 +129,18 @@ class TlsProbeTest {
             dnsFailed(DnsResolver.DOH_8_8_8_8),
             dnsFailed(DnsResolver.DOH_CLOUDFLARE),
         )
-        val verdict = DnsVerdict(DnsVerdictKind.FILTERED, listOf("10.10.34.35"), emptyList())
-        assertNull(pickProbeIp(results, verdict))
+        assertNull(pickProbeIp(results))
+    }
+
+    @Test
+    fun `bogon system ip is never dialled when doh has no answer`() {
+        val results = listOf(
+            dns(DnsResolver.SYSTEM, "192.168.0.1"),
+            dnsFailed(DnsResolver.DOH_1_1_1_1),
+            dnsFailed(DnsResolver.DOH_8_8_8_8),
+            dnsFailed(DnsResolver.DOH_CLOUDFLARE),
+        )
+        assertNull(pickProbeIp(results))
     }
 
     @Test
@@ -140,7 +151,7 @@ class TlsProbeTest {
             dnsFailed(DnsResolver.DOH_8_8_8_8),
             dnsFailed(DnsResolver.DOH_CLOUDFLARE),
         )
-        assertNull(pickProbeIp(results, DnsVerdict(DnsVerdictKind.UNRESOLVABLE)))
+        assertNull(pickProbeIp(results))
     }
 
     @Test
