@@ -93,6 +93,14 @@ class MainActivity : HelperBaseComponentActivity() {
             if (restartService) LauncherManager.restartService(this)
         }
 
+    // The diagnose can change a profile (its fix flags), so the server
+    // list reloads on return — otherwise the fix indicator dot would
+    // only appear after the next manual refresh.
+    private val dnsDiagnoseLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            mainViewModel.reloadServerList()
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainViewModel.onAction(MainAction.Initialize)
@@ -259,7 +267,7 @@ class MainActivity : HelperBaseComponentActivity() {
         val intent = Intent(this, DnsDiagnoseActivity::class.java).apply {
             putExtra("guid", guid)
         }
-        startActivity(intent)
+        dnsDiagnoseLauncher.launch(intent)
     }
 
     private fun editServer(guid: String, profile: ProfileItem) {

@@ -394,6 +394,20 @@ private fun ServerListItem(
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(row.remarks, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // Small red dot when a diagnose fix is applied to this
+                // config (direct DoH and/or mixed-case SNI), so it is
+                // visible in the list without opening the diagnose
+                // screen. Decorative: the diagnose screen itself shows
+                // which fix is on and offers Revert.
+                if (row.profile.directDohEnabled || row.profile.sniCaseMixed) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error)
+                    )
+                }
                 if (doubleColumnDisplay) {
                     IconButton(onClick = { actions.more(row.guid, row.profile) }, Modifier.size(36.dp)) {
                         Icon(
