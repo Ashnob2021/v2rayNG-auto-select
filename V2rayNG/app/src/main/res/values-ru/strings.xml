@@ -613,6 +613,8 @@
     <string name="conn_diagnose_sni_ok">SNI is not blocked — the handshake with the real SNI reaches the server.</string>
     <string name="conn_diagnose_tls_blocked">TLS is blocked — no handshake reaches the server with any SNI.</string>
     <string name="conn_diagnose_sni_inconclusive">The probe could not complete a handshake — every handshake failed with a network error, so this does not prove TLS is blocked.</string>
+    <string name="conn_diagnose_sni_case">SNI with different case (%1$s)</string>
+    <string name="conn_diagnose_sni_case_sensitive">SNI filtering is case-sensitive — the real SNI is blocked, but the same SNI with different letter case reaches the server.</string>
     <string name="conn_diagnose_fingerprint_note">The probe uses the phone TLS stack, so it cannot reproduce the profile fingerprint; changing the fingerprint stays a fix to try.</string>
     <string name="conn_diagnose_tls_skipped_reality">TLS probe skipped — this is a REALITY config. A plain TLS handshake is not a REALITY handshake, so it cannot prove anything here.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">TLS probe skipped — this config does not use TLS.</string>

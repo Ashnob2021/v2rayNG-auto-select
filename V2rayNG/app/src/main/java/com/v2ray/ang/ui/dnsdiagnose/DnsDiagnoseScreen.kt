@@ -434,6 +434,10 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
             text = stringResource(R.string.conn_diagnose_sni_inconclusive),
             style = MaterialTheme.typography.bodyLarge,
         )
+        SniVerdictKind.CASE_SENSITIVE -> Text(
+            text = stringResource(R.string.conn_diagnose_sni_case_sensitive),
+            style = MaterialTheme.typography.bodyLarge,
+        )
         SniVerdictKind.SKIPPED, null -> Unit
     }
     if (state.tls.isNotEmpty()) {
@@ -473,6 +477,7 @@ private fun tlsVariantText(result: TlsProbeResult): String {
         TlsProbeVariant.REAL_SNI -> stringResource(R.string.conn_diagnose_sni_real, result.sni.orEmpty())
         TlsProbeVariant.HARMLESS_SNI -> stringResource(R.string.conn_diagnose_sni_harmless)
         TlsProbeVariant.NO_SNI -> stringResource(R.string.conn_diagnose_sni_none)
+        TlsProbeVariant.CASE_SNI -> stringResource(R.string.conn_diagnose_sni_case, result.sni.orEmpty())
     }
 }
 

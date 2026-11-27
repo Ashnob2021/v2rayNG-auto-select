@@ -63,8 +63,9 @@ object TlsProbe {
             probeTls(ip, port, TlsProbeVariant.REAL_SNI, realSni, alpn),
             probeTls(ip, port, TlsProbeVariant.HARMLESS_SNI, HARMLESS_SNI, alpn),
             probeTls(ip, port, TlsProbeVariant.NO_SNI, null, alpn),
+            probeTls(ip, port, TlsProbeVariant.CASE_SNI, alterSniCase(realSni), alpn),
         )
-        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2])
+        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2], tls[3])
         return ConnectionProbeResult(tcp, tls, verdict)
     }
 
@@ -173,6 +174,9 @@ enum class TlsProbeVariant {
     REAL_SNI,
     HARMLESS_SNI,
     NO_SNI,
+    /** The real SNI with its letter case changed, to test whether the
+     *  SNI filter matches case-sensitively. */
+    CASE_SNI,
 }
 
 enum class TlsOutcome {
@@ -216,6 +220,10 @@ enum class SniVerdictKind {
      *  is blocked. A config can still connect — its handshake (fingerprint)
      *  differs from the phone stack's, which is what failed here. */
     INCONCLUSIVE,
+    /** The real SNI is blocked, but the same SNI with different letter
+     *  case reaches the server: the SNI filter matches case-sensitively,
+     *  so changing the SNI case (or fragmenting the ClientHello) is a fix. */
+    CASE_SENSITIVE,
 }
 
 /**
@@ -251,9 +259,13 @@ fun evaluateSniVerdict(
     real: TlsProbeResult?,
     harmless: TlsProbeResult?,
     noSni: TlsProbeResult?,
+    caseSni: TlsProbeResult? = null,
 ): SniVerdictKind {
     if (real == null) return SniVerdictKind.SKIPPED
     if (reachedServer(real)) return SniVerdictKind.NOT_BLOCKED
+    if (caseSni?.let { reachedServer(it) } == true) {
+        return SniVerdictKind.CASE_SENSITIVE
+    }
     if (harmless?.let { reachedServer(it) } == true || noSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.FILTERED
     }
@@ -264,6 +276,19 @@ fun evaluateSniVerdict(
         return SniVerdictKind.INCONCLUSIVE
     }
     return SniVerdictKind.TLS_BLOCKED
+}
+
+/**
+ * The real SNI with its letter case changed, for the case-sensitivity
+ * probe. A SNI that contains any uppercase letter is lowercased; an
+ * all-lowercase SNI gets the first letter of each label capitalized.
+ * Pure logic, covered by unit tests.
+ */
+fun alterSniCase(sni: String): String {
+    if (sni.any { it.isUpperCase() }) return sni.lowercase()
+    return sni.split(".").joinToString(".") { label ->
+        label.replaceFirstChar { it.uppercaseChar() }
+    }
 }
 
 /** A handshake that completed, or one that failed after a ServerHello

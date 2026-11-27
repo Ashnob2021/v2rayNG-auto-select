@@ -121,6 +121,55 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `all lowercase sni gets first letter of each label capitalized`() {
+        assertEquals("Yrui0hd835j2.Pages.Dev", alterSniCase("yrui0hd835j2.pages.dev"))
+    }
+
+    @Test
+    fun `mixed case sni is lowercased`() {
+        assertEquals("pr2x23nrdweakz7tkrna.pages.dev", alterSniCase("pR2X23nrDWeakz7TKRNA.pAges.Dev"))
+    }
+
+    @Test
+    fun `case variant reaching while real sni fails means case sensitive filtering`() {
+        assertEquals(
+            SniVerdictKind.CASE_SENSITIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+            )
+        )
+    }
+
+    @Test
+    fun `case variant reaching beats filtered when harmless sni also reaches`() {
+        assertEquals(
+            SniVerdictKind.CASE_SENSITIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_FAILED),
+            )
+        )
+    }
+
+    @Test
+    fun `case variant failing while harmless sni reaches stays filtered`() {
+        assertEquals(
+            SniVerdictKind.FILTERED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.TIMEOUT),
+            )
+        )
+    }
+
+    @Test
     fun `no real sni result means skipped`() {
         assertEquals(SniVerdictKind.SKIPPED, evaluateSniVerdict(null, null, null))
     }
