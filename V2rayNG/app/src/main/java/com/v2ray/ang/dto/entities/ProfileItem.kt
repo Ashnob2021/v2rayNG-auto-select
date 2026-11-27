@@ -77,6 +77,14 @@ data class ProfileItem(
 
     var directDohEnabled: Boolean = false,
 
+    /** The direct-DoH endpoint the diagnose found answering for this
+     *  profile's domain on the network where the fix was applied
+     *  (a URL from AppConfig.DIRECT_DOH_ADDRESSES, or null when none
+     *  answered). The generated config writes it first: the core tries
+     *  the endpoints serially and each failure costs up to ~5 s, so the
+     *  answering endpoint must not sit behind dead ones. */
+    var directDohPreferred: String? = null,
+
     /** Sends the SNI with mixed letter case (alterSniCase in util) when
      *  the diagnose found the SNI is filtered case-sensitively. Only
      *  affects plain TLS; REALITY keeps the SNI as stored. */

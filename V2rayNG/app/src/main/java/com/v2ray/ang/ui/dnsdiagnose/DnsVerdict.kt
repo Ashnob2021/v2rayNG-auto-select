@@ -1,5 +1,7 @@
 package com.v2ray.ang.ui.dnsdiagnose
 
+import com.v2ray.ang.AppConfig
+
 /**
  * The verdict of one diagnose round, decided from the probe rows.
  * Pure logic, covered by unit tests.
@@ -106,6 +108,22 @@ fun evaluateVerdict(results: List<DnsProbeResult>): VerdictEvaluation {
         DnsVerdict(DnsVerdictKind.HIJACKED, systemIps = systemIps, dohIps = dohIps),
         needsRetry = true
     )
+}
+
+/**
+ * The direct-DoH endpoint to write first when the fix is applied: the
+ * fastest endpoint that answered this diagnose round. Only IP-based
+ * endpoints from AppConfig.DIRECT_DOH_ADDRESSES qualify — the fix is
+ * IP-based, so a hostname endpoint (cloudflare-dns.com) cannot be
+ * ordered into it. Null when no such endpoint answered, in which case
+ * the fix keeps the standard order.
+ */
+fun preferredDohAddress(results: List<DnsProbeResult>): String? {
+    return results
+        .filter { it.resolver.dohUrl in AppConfig.DIRECT_DOH_ADDRESSES }
+        .filter { it.ips != null && it.ips.isNotEmpty() }
+        .minByOrNull { it.latencyMs ?: Long.MAX_VALUE }
+        ?.resolver?.dohUrl
 }
 
 /**

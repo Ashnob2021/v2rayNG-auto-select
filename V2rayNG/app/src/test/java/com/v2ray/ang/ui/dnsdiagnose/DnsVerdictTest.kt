@@ -175,6 +175,36 @@ class DnsVerdictTest {
     }
 
     @Test
+    fun `preferred doh is the fastest answering endpoint`() {
+        val results = listOf(
+            failed(DnsResolver.DOH_1_1_1_1, ProbeError.NETWORK),
+            DnsProbeResult(DnsResolver.DOH_8_8_8_8, listOf("91.198.77.180"), 300L, null),
+            DnsProbeResult(DnsResolver.DOH_208_67_222_222, listOf("91.198.77.180"), 121L, null),
+            failed(DnsResolver.DOH_94_140_14_14, ProbeError.TIMEOUT),
+        )
+        assertEquals("https://208.67.222.222/dns-query", preferredDohAddress(results))
+    }
+
+    @Test
+    fun `hostname doh answer does not count as preferred`() {
+        val results = listOf(
+            failed(DnsResolver.DOH_1_1_1_1, ProbeError.NETWORK),
+            ok(DnsResolver.DOH_CLOUDFLARE, "91.198.77.180"),
+        )
+        assertEquals(null, preferredDohAddress(results))
+    }
+
+    @Test
+    fun `no answering endpoint gives no preferred`() {
+        val results = listOf(
+            ok(DnsResolver.SYSTEM, "10.10.34.35"),
+            failed(DnsResolver.DOH_1_1_1_1, ProbeError.NETWORK),
+            failed(DnsResolver.DOH_208_67_222_222, ProbeError.TIMEOUT),
+        )
+        assertEquals(null, preferredDohAddress(results))
+    }
+
+    @Test
     fun `filtering sinkhole detection`() {
         assertTrue(isFilteringIp("10.10.34.35"))
         assertTrue(isFilteringIp("10.10.34.34"))

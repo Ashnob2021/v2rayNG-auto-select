@@ -117,7 +117,11 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         val profile = currentProfile ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val updated = profile.copy(directDohEnabled = true)
+                // Remember which endpoint answered on this network: the
+                // generated config writes it first, so the core does not
+                // burn ~5 s per dead endpoint before reaching it.
+                val preferred = preferredDohAddress(_uiState.value.rows)
+                val updated = profile.copy(directDohEnabled = true, directDohPreferred = preferred)
                 MmkvManager.encodeServerConfig(_uiState.value.guid, updated)
                 currentProfile = updated
                 val verified = verifyAppliedFix()
@@ -140,7 +144,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         val profile = currentProfile ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val updated = profile.copy(directDohEnabled = false)
+                val updated = profile.copy(directDohEnabled = false, directDohPreferred = null)
                 MmkvManager.encodeServerConfig(_uiState.value.guid, updated)
                 currentProfile = updated
                 withContext(Dispatchers.Main) {

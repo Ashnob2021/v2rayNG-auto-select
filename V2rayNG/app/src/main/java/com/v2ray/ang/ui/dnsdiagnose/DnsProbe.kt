@@ -20,10 +20,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 /**
- * Probes one domain against ten resolvers in parallel:
+ * Probes one domain against fourteen resolvers in parallel:
  * the phone's system UDP resolver, and DoH to 1.1.1.1, 1.0.0.1,
  * 8.8.8.8, 8.8.4.4, 9.9.9.9, 149.112.112.112, 208.67.222.222,
- * 94.140.14.14 and cloudflare-dns.com (RFC 8484 GET).
+ * 94.140.14.14, 76.76.2.0, 185.222.222.222, 194.242.2.2, 77.88.8.8
+ * and cloudflare-dns.com (RFC 8484 GET).
  *
  * Several DoH endpoints from different operators are probed on
  * purpose: on a filtered network any single DoH endpoint can be
@@ -59,8 +60,12 @@ object DnsProbe {
         val doh149 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_149_112_112_112, plainClient) }
         val doh208 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_208_67_222_222, plainClient) }
         val doh94 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_94_140_14_14, plainClient) }
+        val doh76 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_76_76_2_0, plainClient) }
+        val doh185 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_185_222_222_222, plainClient) }
+        val doh194 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_194_242_2_2, plainClient) }
+        val doh77 = async(Dispatchers.IO) { probeDoh(asciiDomain, DnsResolver.DOH_77_88_8_8, plainClient) }
         val dohCf = async(Dispatchers.IO) { probeDohCloudflare(asciiDomain) }
-        listOf(system.await(), doh1.await(), doh1b.await(), doh8.await(), doh8b.await(), doh9.await(), doh149.await(), doh208.await(), doh94.await(), dohCf.await())
+        listOf(system.await(), doh1.await(), doh1b.await(), doh8.await(), doh8b.await(), doh9.await(), doh149.await(), doh208.await(), doh94.await(), doh76.await(), doh185.await(), doh194.await(), doh77.await(), dohCf.await())
     }
 
     private fun probeSystemDns(domain: String, context: Context): DnsProbeResult {

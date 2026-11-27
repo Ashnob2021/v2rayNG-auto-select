@@ -44,6 +44,16 @@ class DnsFixVerificationTest {
     }
 
     @Test
+    fun `config with a small operator doh address is verified`() {
+        assertTrue(
+            isDirectDohAppliedInConfig(
+                config(servers = """{"address": "https://185.222.222.222/dns-query", "domains": ["full:nlp.dandev.de5.net"], "tag": "direct-doh"}"""),
+                "nlp.dandev.de5.net"
+            )
+        )
+    }
+
+    @Test
     fun `domain match is case insensitive`() {
         assertTrue(isDirectDohAppliedInConfig(config(outboundAddress = "Nlp.Dandev.De5.Net"), "NLP.DANDEV.DE5.NET"))
     }

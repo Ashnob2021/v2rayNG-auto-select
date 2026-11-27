@@ -165,7 +165,23 @@ object AppConfig {
         "https://149.112.112.112/dns-query",
         "https://208.67.222.222/dns-query",
         "https://94.140.14.14/dns-query",
+        "https://76.76.2.0/dns-query",
+        "https://185.222.222.222/dns-query",
+        "https://194.242.2.2/dns-query",
+        "https://77.88.8.8/dns-query",
     )
+
+    /** Orders the direct-DoH endpoints for the generated config: the
+     *  endpoints the diagnose found answering on this network first
+     *  (in the order given), then the rest in their standard order.
+     *  The core tries them serially and each failure costs up to ~5 s,
+     *  so the answering endpoint must not sit behind six dead ones —
+     *  that is what made the fix fail on a network where only
+     *  208.67.222.222 answered. Unknown entries are dropped. */
+    fun orderedDirectDohAddresses(preferred: List<String>): List<String> {
+        val known = preferred.filter { it in DIRECT_DOH_ADDRESSES }.distinct()
+        return (known + DIRECT_DOH_ADDRESSES).distinct()
+    }
     const val DNS_VPN = "1.1.1.1"
     const val GEOSITE_PRIVATE = "geosite:private"
     const val GEOSITE_CN = "geosite:cn"

@@ -38,6 +38,10 @@ enum class DnsResolver(
     DOH_149_112_112_112("DoH 149.112.112.112", "https://149.112.112.112/dns-query"),
     DOH_208_67_222_222("DoH 208.67.222.222", "https://208.67.222.222/dns-query"),
     DOH_94_140_14_14("DoH 94.140.14.14", "https://94.140.14.14/dns-query"),
+    DOH_76_76_2_0("DoH 76.76.2.0", "https://76.76.2.0/dns-query"),
+    DOH_185_222_222_222("DoH 185.222.222.222", "https://185.222.222.222/dns-query"),
+    DOH_194_242_2_2("DoH 194.242.2.2", "https://194.242.2.2/dns-query"),
+    DOH_77_88_8_8("DoH 77.88.8.8", "https://77.88.8.8/dns-query"),
     DOH_CLOUDFLARE("DoH cloudflare-dns.com", "https://cloudflare-dns.com/dns-query"),
 }
 

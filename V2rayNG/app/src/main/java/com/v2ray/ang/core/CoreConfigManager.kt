@@ -197,7 +197,8 @@ object CoreConfigManager {
         configureRouting(configContext, v2rayConfig, policyGroupBalancerTags)
         configureFakeDns(v2rayConfig)
         val directDohDomains = collectDirectDohDomains(configContext)
-        configureDns(configContext, v2rayConfig, policyGroupBalancerTags, directDohDomains)
+        val directDohPreferred = collectDirectDohPreferred(configContext)
+        configureDns(configContext, v2rayConfig, policyGroupBalancerTags, directDohDomains, directDohPreferred)
         configureLocalDns(configContext, v2rayConfig)
         configureRootModeDns(v2rayConfig)
 
@@ -866,15 +867,19 @@ object CoreConfigManager {
         v2rayConfig: V2rayConfig,
         policyGroupBalancerTags: Map<String, String>,
         directDohDomains: Set<String> = emptySet(),
+        directDohPreferred: List<String> = emptyList(),
     ) {
         val servers = ArrayList<Any>()
         if (directDohDomains.isNotEmpty()) {
             // Direct DoH for flagged profiles: first in the list, so they
             // are consulted before the catch-all remote entries below.
-            // One entry per endpoint, all with the same tag: the core
-            // falls back to the next endpoint when one does not answer,
-            // so the fix no longer depends on 1.1.1.1 alone.
-            AppConfig.DIRECT_DOH_ADDRESSES.forEach { address ->
+            // One entry per endpoint, all with the same tag. The endpoints
+            // the diagnose found answering on this network go first
+            // (directDohPreferred): the core tries them serially and each
+            // failure costs up to ~5 s, so the answering endpoint must not
+            // sit behind dead ones — that is what made the fix fail on a
+            // network where only 208.67.222.222 answered.
+            AppConfig.orderedDirectDohAddresses(directDohPreferred).forEach { address ->
                 servers.add(
                     V2rayConfig.DnsBean.ServersBean(
                         address = address,
@@ -1103,6 +1108,28 @@ object CoreConfigManager {
             }
         }
         return domains
+    }
+
+    /**
+     * The direct-DoH endpoints the diagnose found answering, one per
+     * flagged profile in resolved order, deduplicated. The generated
+     * config writes them first (see AppConfig.orderedDirectDohAddresses).
+     * A profile whose diagnose found no answering endpoint contributes
+     * nothing; an endpoint outside DIRECT_DOH_ADDRESSES is dropped.
+     */
+    private fun collectDirectDohPreferred(configContext: CoreConfigContext): List<String> {
+        val preferred = mutableListOf<String>()
+        val profiles = configContext.resolvedOutbounds.flatMap { spec ->
+            listOf(spec.profile) + spec.resolvedProfiles
+        }
+        for (profile in profiles) {
+            if (!profile.directDohEnabled) continue
+            val endpoint = profile.directDohPreferred?.trim().orEmpty()
+            if (endpoint.isNotEmpty() && endpoint in AppConfig.DIRECT_DOH_ADDRESSES && endpoint !in preferred) {
+                preferred.add(endpoint)
+            }
+        }
+        return preferred
     }
 
     internal enum class OutboundDomainResolution {
