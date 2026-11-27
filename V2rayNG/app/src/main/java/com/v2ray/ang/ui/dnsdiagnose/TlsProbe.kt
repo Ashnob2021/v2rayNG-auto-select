@@ -29,10 +29,14 @@ import javax.net.ssl.X509TrustManager
  * public address. A bogon — including the filtering sinkhole
  * 10.10.34.34/35 — is never dialled. The probes stop at the TLS
  * handshake: no application data is ever sent. A plain [Socket] first proves the
- * IP:port is reachable at all; then three TLS handshakes vary only the
+ * IP:port is reachable at all; then TLS handshakes vary only the
  * SNI — the profile's real SNI, a harmless SNI, and no SNI — so a
  * difference between them isolates SNI filtering from a general TLS
- * block.
+ * block. A fourth handshake with the real SNI in a different letter
+ * case proves the filter is case-sensitive; it is skipped when the
+ * mixed-case SNI fix is already on, because then the "real" handshake
+ * already tests the SNI the connection sends, and the case variant
+ * would only re-test the stored form.
  *
  * Honest limits, recorded here so the UI does not over-claim:
  * - The handshakes use the phone's TLS stack, so they cannot reproduce
@@ -55,18 +59,29 @@ object TlsProbe {
         port: Int,
         realSni: String?,
         alpn: List<String>,
+        includeCaseVariant: Boolean = true,
     ): ConnectionProbeResult {
         val tcp = probeTcp(ip, port)
         if (tcp.outcome != TcpOutcome.CONNECTED) {
             return ConnectionProbeResult(tcp, emptyList(), SniVerdictKind.SKIPPED)
         }
-        val tls = listOf(
-            probeTls(ip, port, TlsProbeVariant.REAL_SNI, realSni, alpn),
-            probeTls(ip, port, TlsProbeVariant.HARMLESS_SNI, HARMLESS_SNI, alpn),
-            probeTls(ip, port, TlsProbeVariant.NO_SNI, null, alpn),
-            probeTls(ip, port, TlsProbeVariant.CASE_SNI, alterSniCase(realSni), alpn),
-        )
-        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2], tls[3])
+        val tls = buildList {
+            add(probeTls(ip, port, TlsProbeVariant.REAL_SNI, realSni, alpn))
+            add(probeTls(ip, port, TlsProbeVariant.HARMLESS_SNI, HARMLESS_SNI, alpn))
+            add(probeTls(ip, port, TlsProbeVariant.NO_SNI, null, alpn))
+            // The case variant exists to prove the filter is
+            // case-sensitive, i.e. that changing the SNI case would
+            // help. Once the mixed-case fix is on, that question is
+            // already answered: the "real" handshake tests the SNI
+            // the connection actually sends, and the case variant
+            // would only re-test the stored form — the one already
+            // known to be blocked — and its result can only confuse
+            // the verdict. So the caller skips it when the fix is on.
+            if (includeCaseVariant) {
+                add(probeTls(ip, port, TlsProbeVariant.CASE_SNI, alterSniCase(realSni), alpn))
+            }
+        }
+        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2], tls.getOrNull(3))
         return ConnectionProbeResult(tcp, tls, verdict)
     }
 

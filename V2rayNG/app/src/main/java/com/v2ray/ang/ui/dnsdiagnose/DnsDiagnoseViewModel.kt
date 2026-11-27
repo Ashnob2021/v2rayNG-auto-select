@@ -237,7 +237,10 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 // SNI the connection actually sends, not the stored one.
                 val realSni = if (profile.sniCaseMixed) alterSniCase(storedSni) ?: storedSni else storedSni
                 val alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
-                TlsProbe.probeConnection(ip, port, realSni, alpn)
+                // Skip the case-variant handshake when the fix is on:
+                // it would only re-test the stored SNI, which is the
+                // form already known to be blocked.
+                TlsProbe.probeConnection(ip, port, realSni, alpn, includeCaseVariant = !profile.sniCaseMixed)
             }
             TlsProbeMode.REALITY -> {
                 val tcp = TlsProbe.probeTcp(ip, port)

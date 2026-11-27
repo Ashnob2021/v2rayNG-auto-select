@@ -84,6 +84,24 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `without a case variant the stored form reaching cannot yield case sensitive`() {
+        // Device run 2026-11-28 02:39, DAN-2053-IP-6, with the
+        // mixed-case fix on: the probe no longer runs the case
+        // variant, so the stored lowercase form reaching the server
+        // must not produce a CASE_SENSITIVE verdict. Real SNI
+        // (mixed-case) and harmless SNI both failed with network
+        // errors, no-SNI was reset: nothing completed.
+        assertEquals(
+            SniVerdictKind.TLS_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+            )
+        )
+    }
+
+    @Test
     fun `real sni timeout but harmless sni ok means sni is filtered`() {
         assertEquals(
             SniVerdictKind.FILTERED,
