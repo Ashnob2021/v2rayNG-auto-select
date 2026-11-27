@@ -76,6 +76,11 @@ data class ProfileItem(
     var browserDialerMode: String? = null,
 
     var directDohEnabled: Boolean = false,
+
+    /** Sends the SNI with mixed letter case (alterSniCase in util) when
+     *  the diagnose found the SNI is filtered case-sensitively. Only
+     *  affects plain TLS; REALITY keeps the SNI as stored. */
+    var sniCaseMixed: Boolean = false,
 ) {
 
     companion object {

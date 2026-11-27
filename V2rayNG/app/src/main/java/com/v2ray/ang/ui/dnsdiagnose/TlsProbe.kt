@@ -3,6 +3,7 @@ package com.v2ray.ang.ui.dnsdiagnose
 import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.v2ray.ang.util.alterSniCase
 import java.io.IOException
 import java.net.ConnectException
 import java.net.InetSocketAddress
@@ -285,20 +286,6 @@ fun evaluateSniVerdict(
         return SniVerdictKind.INCONCLUSIVE
     }
     return SniVerdictKind.TLS_BLOCKED
-}
-
-/**
- * The real SNI with its letter case changed, for the case-sensitivity
- * probe. A SNI that contains any uppercase letter is lowercased; an
- * all-lowercase SNI gets the first letter of each label capitalized.
- * Pure logic, covered by unit tests.
- */
-fun alterSniCase(sni: String?): String? {
-    if (sni == null) return null
-    if (sni.any { it.isUpperCase() }) return sni.lowercase()
-    return sni.split(".").joinToString(".") { label ->
-        label.replaceFirstChar { it.uppercaseChar() }
-    }
 }
 
 /** A handshake that completed, or one that failed after a ServerHello

@@ -12,6 +12,7 @@ data class DnsDiagnoseUiState(
     val remarks: String = "",
     val domain: String = "",
     val flagOn: Boolean = false,
+    val sniCaseMixed: Boolean = false,
     val phase: DnsDiagnosePhase = DnsDiagnosePhase.LOADING,
     val probing: Boolean = false,
     val rows: List<DnsProbeResult> = emptyList(),
@@ -28,5 +29,7 @@ sealed interface DnsDiagnoseAction {
     data object Retest : DnsDiagnoseAction
     data object ApplyFix : DnsDiagnoseAction
     data object RevertFix : DnsDiagnoseAction
+    data object ApplySniFix : DnsDiagnoseAction
+    data object RevertSniFix : DnsDiagnoseAction
     data object TestCore : DnsDiagnoseAction
 }

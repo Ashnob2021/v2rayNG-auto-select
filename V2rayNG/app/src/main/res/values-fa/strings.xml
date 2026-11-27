@@ -611,6 +611,11 @@
     <string name="conn_diagnose_sni_inconclusive">پروب نتوانست هندشیک را کامل کند — هر سه هندشیک با خطای شبکه ناموفق بودند، پس این ثابت نمی‌کند TLS بلاک است.</string>
     <string name="conn_diagnose_sni_case">SNI با حروف متفاوت (%1$s)</string>
     <string name="conn_diagnose_sni_case_sensitive">فیلترینگ SNI به بزرگی و کوچکی حروف حساس است — SNI واقعی بلاک است، ولی همان SNI با حروف متفاوت به سرور می‌رسد.</string>
+    <string name="sni_fix_title">اصلاح: SNI با حروف متفاوت</string>
+    <string name="sni_fix_note">فیلترینگ SNI به بزرگی و کوچکی حروف حساس است: شکل کوچیک بلاک است، ولی همان SNI با حروف متفاوت به سرور می‌رسد. این اصلاح SNI را با حروف متفاوت می‌فرستد تا فیلتر دیگر آن را نگیرد.</string>
+    <string name="sni_fix_apply">اعمال SNI با حروف متفاوت</string>
+    <string name="sni_fix_applied">SNI با حروف متفاوت اعمال شد</string>
+    <string name="sni_fix_applied_note">اتصال حالا SNI را با حروف متفاوت می‌فرستد، پس فیلترِ حساس به حروف دیگر آن را نمی‌گیرد.</string>
     <string name="conn_diagnose_fingerprint_note">پروب از TLS گوشی استفاده می‌کند، پس نمی‌تواند فینگرپرینت پروفایل را بازتولید کند؛ عوض کردن فینگرپرینت هنوز یک راه‌حل قابل امتحان است.</string>
     <string name="conn_diagnose_tls_skipped_reality">پروب TLS رد شد — این یک کانفیگ REALITY است. هندشیک TLS ساده، هندشیک REALITY نیست، پس اینجا هیچی را ثابت نمی‌کند.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">پروب TLS رد شد — این کانفیگ از TLS استفاده نمی‌کند.</string>

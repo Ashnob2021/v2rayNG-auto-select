@@ -11,6 +11,7 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.ui.base.BaseViewModel
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import com.v2ray.ang.util.alterSniCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +53,8 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     guid = guid,
                     remarks = profile.remarks,
                     domain = domain,
-                    flagOn = profile.directDohEnabled
+                    flagOn = profile.directDohEnabled,
+                    sniCaseMixed = profile.sniCaseMixed,
                 )
             }
             runProbes()
@@ -68,6 +70,8 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
             DnsDiagnoseAction.Retest -> runProbes()
             DnsDiagnoseAction.ApplyFix -> applyFix()
             DnsDiagnoseAction.RevertFix -> revertFix()
+            DnsDiagnoseAction.ApplySniFix -> applySniFix()
+            DnsDiagnoseAction.RevertSniFix -> revertSniFix()
             DnsDiagnoseAction.TestCore -> runCoreTest()
         }
     }
@@ -150,6 +154,56 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
     }
 
     /**
+     * Mixed-case SNI fix: sends the SNI with its letter case changed, so
+     * a case-sensitive SNI filter no longer matches it. The stored SNI is
+     * untouched — the flag only changes what the connection sends. After
+     * applying or reverting, the probes re-run so the Real SNI row shows
+     * the SNI that is actually in effect; the core test is the final
+     * proof the real connection works with it.
+     */
+    private fun applySniFix() {
+        val profile = currentProfile ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val updated = profile.copy(sniCaseMixed = true)
+                MmkvManager.encodeServerConfig(_uiState.value.guid, updated)
+                currentProfile = updated
+                withContext(Dispatchers.Main) {
+                    _uiState.update { it.copy(sniCaseMixed = true) }
+                    toast(R.string.sni_fix_applied)
+                }
+                runProbes()
+            } catch (e: Exception) {
+                LogUtil.e("DnsDiagnose", "applySniFix failed: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    toast(R.string.toast_failure)
+                }
+            }
+        }
+    }
+
+    private fun revertSniFix() {
+        val profile = currentProfile ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val updated = profile.copy(sniCaseMixed = false)
+                MmkvManager.encodeServerConfig(_uiState.value.guid, updated)
+                currentProfile = updated
+                withContext(Dispatchers.Main) {
+                    _uiState.update { it.copy(sniCaseMixed = false) }
+                    toast(R.string.dns_diagnose_reverted)
+                }
+                runProbes()
+            } catch (e: Exception) {
+                LogUtil.e("DnsDiagnose", "revertSniFix failed: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    toast(R.string.toast_failure)
+                }
+            }
+        }
+    }
+
+    /**
      * TCP, then SNI/TLS, against the IP the DNS stage trusted. Runs only
      * when the DNS stage produced an IP to dial and the profile has a
      * port. TLS handshakes run only for TLS configs. For REALITY the
@@ -167,7 +221,10 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         if (domain.isEmpty()) return null
         return when (tlsProbeMode(profile.security)) {
             TlsProbeMode.TLS -> {
-                val realSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+                val storedSni = profile.sni?.trim()?.takeIf { Utils.isDomainName(it) } ?: domain
+                // When the mixed-case SNI fix is on, the probe tests the
+                // SNI the connection actually sends, not the stored one.
+                val realSni = if (profile.sniCaseMixed) alterSniCase(storedSni) ?: storedSni else storedSni
                 val alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
                 TlsProbe.probeConnection(ip, port, realSni, alpn)
             }

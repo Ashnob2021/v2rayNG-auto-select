@@ -14,6 +14,7 @@ import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import com.v2ray.ang.util.alterSniCase
 
 /**
  * Centralizes ProfileItem -> OutboundBean conversion.
@@ -571,9 +572,17 @@ object CoreOutboundBuilder {
 
         streamSettings.security = streamSecurity.nullIfBlank()
         if (streamSettings.security == null) return
+        // Mixed-case SNI fix (diagnose): only for plain TLS. REALITY
+        // keeps the SNI as stored — its front domain must match what the
+        // server expects.
+        val tlsServerName = if (profileItem.sniCaseMixed && streamSecurity == AppConfig.TLS) {
+            alterSniCase(sni)
+        } else {
+            sni
+        }
         val tlsSetting = OutboundBean.StreamSettingsBean.TlsSettingsBean(
             allowInsecure = allowInsecure,
-            serverName = sni.nullIfBlank(),
+            serverName = tlsServerName.nullIfBlank(),
             fingerprint = profileItem.fingerPrint.nullIfBlank(),
             alpn = profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },
             echConfigList = profileItem.echConfigList.nullIfBlank(),

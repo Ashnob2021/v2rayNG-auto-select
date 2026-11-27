@@ -145,6 +145,46 @@ private fun DnsDiagnoseContent(
         }
     }
 
+    // Applied mixed-case SNI fix: always visible while its flag is on,
+    // whatever the verdict says — same reason as the DoH block above.
+    if (state.sniCaseMixed) {
+        Spacer(modifier = Modifier.height(16.dp))
+        ItemDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.sni_fix_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = stringResource(R.string.sni_fix_applied),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = stringResource(R.string.sni_fix_applied_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { onAction(DnsDiagnoseAction.RevertSniFix) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(R.string.dns_diagnose_revert))
+        }
+        Text(
+            text = stringResource(R.string.dns_diagnose_revert_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.dns_diagnose_restart_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
     Spacer(modifier = Modifier.height(16.dp))
     ItemDivider()
     Spacer(modifier = Modifier.height(16.dp))
@@ -212,6 +252,38 @@ private fun DnsDiagnoseContent(
         ItemDivider()
         Spacer(modifier = Modifier.height(16.dp))
         ConnectionSection(state = state)
+    }
+
+    // Fix: only offered when the SNI is filtered case-sensitively.
+    // The applied state and Revert live in the block above the tests
+    // now, so they are reachable whatever the verdict is. This section
+    // only offers Apply when the flag is off.
+    if (!state.probing && state.sniVerdict == SniVerdictKind.CASE_SENSITIVE && !state.sniCaseMixed) {
+        Spacer(modifier = Modifier.height(16.dp))
+        ItemDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.sni_fix_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = stringResource(R.string.sni_fix_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = { onAction(DnsDiagnoseAction.ApplySniFix) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(R.string.sni_fix_apply))
+        }
+        Text(
+            text = stringResource(R.string.dns_diagnose_revert_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     // Fix: only offered when the system resolver is the problem.
