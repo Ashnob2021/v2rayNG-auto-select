@@ -175,6 +175,19 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `real sni failing after serverhello while case variant completes means case sensitive`() {
+        assertEquals(
+            SniVerdictKind.CASE_SENSITIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+            )
+        )
+    }
+
+    @Test
     fun `no real sni result means skipped`() {
         assertEquals(SniVerdictKind.SKIPPED, evaluateSniVerdict(null, null, null))
     }

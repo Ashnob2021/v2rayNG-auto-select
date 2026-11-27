@@ -262,10 +262,19 @@ fun evaluateSniVerdict(
     caseSni: TlsProbeResult? = null,
 ): SniVerdictKind {
     if (real == null) return SniVerdictKind.SKIPPED
-    if (reachedServer(real)) return SniVerdictKind.NOT_BLOCKED
+    // A completed handshake with the real SNI means the SNI is fine,
+    // whatever the other variants did.
+    if (real.outcome == TlsOutcome.HANDSHAKE_OK) return SniVerdictKind.NOT_BLOCKED
+    // The real SNI's handshake failed but the same SNI with different
+    // letter case completes: the filter matches case-sensitively. This
+    // check runs before "reached" below, because a handshake that fails
+    // after ServerHello is itself the blocking.
     if (caseSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.CASE_SENSITIVE
     }
+    // The SNI reached the server (it answered, then the handshake
+    // failed): the SNI itself is not blocked.
+    if (reachedServer(real)) return SniVerdictKind.NOT_BLOCKED
     if (harmless?.let { reachedServer(it) } == true || noSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.FILTERED
     }
