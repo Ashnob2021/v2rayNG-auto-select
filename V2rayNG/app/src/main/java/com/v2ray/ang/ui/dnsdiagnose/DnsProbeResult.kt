@@ -6,12 +6,17 @@ package com.v2ray.ang.ui.dnsdiagnose
  * [ips] is non-null only when the resolver answered with a well-formed
  * response; an empty list means a valid response with no A records.
  * [error] is non-null when the probe failed for that resolver.
+ * [queriedServers] holds the resolver server addresses actually asked,
+ * for the system row: the DNS servers the active network assigned
+ * (usually the ISP's), read from its link properties. Empty for DoH
+ * rows, whose endpoint is in [DnsResolver.dohUrl].
  */
 data class DnsProbeResult(
     val resolver: DnsResolver,
     val ips: List<String>?,
     val latencyMs: Long?,
     val error: ProbeError?,
+    val queriedServers: List<String> = emptyList(),
 )
 
 enum class DnsResolver(

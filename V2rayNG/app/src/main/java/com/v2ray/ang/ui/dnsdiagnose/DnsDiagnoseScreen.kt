@@ -459,6 +459,19 @@ private fun ProbeRow(result: DnsProbeResult) {
                 fontWeight = FontWeight.Bold,
             )
             Text(text = statusText, style = MaterialTheme.typography.bodySmall)
+            // System DNS already asks the resolvers the active network
+            // assigned (usually the ISP's); show which ones were asked,
+            // so the user can see whose answers the row reports.
+            if (result.resolver == DnsResolver.SYSTEM && result.queriedServers.isNotEmpty()) {
+                Text(
+                    text = stringResource(
+                        R.string.dns_diagnose_system_resolvers,
+                        result.queriedServers.joinToString(", "),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         result.latencyMs?.let { latency ->
             Text(text = "$latency ms", style = MaterialTheme.typography.bodySmall)

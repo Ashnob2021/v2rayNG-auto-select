@@ -573,6 +573,7 @@
     <string name="dns_diagnose_tests_title">تست‌ها</string>
     <string name="dns_diagnose_tests_note">هر سطر یعنی این ریزالور برای دامنه سرور چه جوابی داد.</string>
     <string name="dns_diagnose_resolver_system">DNS سیستم گوشی</string>
+    <string name="dns_diagnose_system_resolvers">ریزالورها: %1$s</string>
     <string name="dns_diagnose_verdict_title">رأی</string>
     <string name="dns_diagnose_verdict_healthy">DNS سالم است — مشکل از جای دیگری است.</string>
     <string name="dns_diagnose_verdict_hijacked">DNS هایجک شده است</string>

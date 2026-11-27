@@ -581,6 +581,7 @@
     <string name="dns_diagnose_tests_title">Tests</string>
     <string name="dns_diagnose_tests_note">What each resolver answered for the server domain.</string>
     <string name="dns_diagnose_resolver_system">System DNS</string>
+    <string name="dns_diagnose_system_resolvers">Resolvers: %1$s</string>
     <string name="dns_diagnose_verdict_title">Verdict</string>
     <string name="dns_diagnose_verdict_healthy">DNS looks healthy — the problem is elsewhere.</string>
     <string name="dns_diagnose_verdict_hijacked">DNS is hijacked</string>
