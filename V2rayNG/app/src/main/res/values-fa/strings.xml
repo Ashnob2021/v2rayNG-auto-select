@@ -608,6 +608,7 @@
     <string name="conn_diagnose_sni_filtered">SNI فیلتر است — SNI واقعی بلاک می‌شود، ولی SNI بی‌ضرر به سرور می‌رسد.</string>
     <string name="conn_diagnose_sni_ok">SNI بلاک نیست — هندشیک با SNI واقعی به سرور می‌رسد.</string>
     <string name="conn_diagnose_tls_blocked">TLS بلاک است — هیچ هندشیکی با هیچ SNI به سرور نمی‌رسد.</string>
+    <string name="conn_diagnose_sni_inconclusive">پروب نتوانست هندشیک را کامل کند — هر سه هندشیک با خطای شبکه ناموفق بودند، پس این ثابت نمی‌کند TLS بلاک است.</string>
     <string name="conn_diagnose_fingerprint_note">پروب از TLS گوشی استفاده می‌کند، پس نمی‌تواند فینگرپرینت پروفایل را بازتولید کند؛ عوض کردن فینگرپرینت هنوز یک راه‌حل قابل امتحان است.</string>
     <string name="conn_diagnose_tls_skipped_reality">پروب TLS رد شد — این یک کانفیگ REALITY است. هندشیک TLS ساده، هندشیک REALITY نیست، پس اینجا هیچی را ثابت نمی‌کند.</string>
     <string name="conn_diagnose_tls_skipped_no_tls">پروب TLS رد شد — این کانفیگ از TLS استفاده نمی‌کند.</string>

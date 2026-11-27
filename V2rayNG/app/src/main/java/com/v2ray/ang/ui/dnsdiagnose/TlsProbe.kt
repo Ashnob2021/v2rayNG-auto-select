@@ -211,6 +211,11 @@ enum class SniVerdictKind {
     FILTERED,
     TLS_BLOCKED,
     SKIPPED,
+    /** Every handshake failed immediately with a network error, so the
+     *  probe itself could not run: this says nothing about whether TLS
+     *  is blocked. A config can still connect — its handshake (fingerprint)
+     *  differs from the phone stack's, which is what failed here. */
+    INCONCLUSIVE,
 }
 
 /**
@@ -251,6 +256,12 @@ fun evaluateSniVerdict(
     if (reachedServer(real)) return SniVerdictKind.NOT_BLOCKED
     if (harmless?.let { reachedServer(it) } == true || noSni?.let { reachedServer(it) } == true) {
         return SniVerdictKind.FILTERED
+    }
+    if (real.outcome == TlsOutcome.NETWORK &&
+        harmless?.outcome == TlsOutcome.NETWORK &&
+        noSni?.outcome == TlsOutcome.NETWORK
+    ) {
+        return SniVerdictKind.INCONCLUSIVE
     }
     return SniVerdictKind.TLS_BLOCKED
 }

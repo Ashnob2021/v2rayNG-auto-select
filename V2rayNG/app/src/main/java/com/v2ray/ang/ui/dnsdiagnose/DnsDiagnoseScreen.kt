@@ -375,6 +375,10 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
             text = stringResource(R.string.conn_diagnose_tls_blocked),
             style = MaterialTheme.typography.bodyLarge,
         )
+        SniVerdictKind.INCONCLUSIVE -> Text(
+            text = stringResource(R.string.conn_diagnose_sni_inconclusive),
+            style = MaterialTheme.typography.bodyLarge,
+        )
         SniVerdictKind.SKIPPED, null -> Unit
     }
     if (state.tls.isNotEmpty()) {

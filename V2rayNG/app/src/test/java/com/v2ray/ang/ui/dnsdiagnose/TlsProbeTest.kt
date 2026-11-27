@@ -85,6 +85,42 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `all handshakes failing with network error means inconclusive not tls blocked`() {
+        assertEquals(
+            SniVerdictKind.INCONCLUSIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.NETWORK),
+            )
+        )
+    }
+
+    @Test
+    fun `mixed network and timeout failures stay tls blocked`() {
+        assertEquals(
+            SniVerdictKind.TLS_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+            )
+        )
+    }
+
+    @Test
+    fun `network failures with a reset stay tls blocked`() {
+        assertEquals(
+            SniVerdictKind.TLS_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+            )
+        )
+    }
+
+    @Test
     fun `no real sni result means skipped`() {
         assertEquals(SniVerdictKind.SKIPPED, evaluateSniVerdict(null, null, null))
     }
