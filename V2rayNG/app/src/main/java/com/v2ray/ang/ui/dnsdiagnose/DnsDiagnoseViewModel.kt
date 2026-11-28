@@ -290,23 +290,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
             _uiState.update { it.copy(coreTest = CoreTestState.Testing) }
             val state = try {
                 CoreNativeManager.initCoreEnv(app)
-                // The delay measurement never loads the config's DNS
-                // section (shared instance, outbounds only), so the
-                // direct-DoH fix in the speed-test config cannot take
-                // effect there: the outbound's server domain would resolve
-                // through the poisoned system resolver. Pass the
-                // DoH-trusted IP the probe already found, so the
-                // speed-test config dials it directly. Only a DoH answer
-                // counts: the system IP would make the test succeed for a
-                // config whose real connection fails on DNS, so
-                // preferredDohAddress (DoH answers only) is used, not
-                // pickProbeIp.
-                val probeIp = if (_uiState.value.flagOn) {
-                    preferredDohAddress(_uiState.value.rows)
-                } else {
-                    null
-                }
-                val result = CoreConfigManager.getV2rayConfig4Speedtest(app, guid, probeIp)
+                val result = CoreConfigManager.getV2rayConfig4Speedtest(app, guid)
                 if (!result.status) {
                     CoreTestState.Failed
                 } else {
