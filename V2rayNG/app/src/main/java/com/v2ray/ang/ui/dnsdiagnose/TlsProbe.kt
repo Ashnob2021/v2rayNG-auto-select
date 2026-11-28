@@ -1,10 +1,13 @@
 package com.v2ray.ang.ui.dnsdiagnose
 
 import android.os.SystemClock
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.v2ray.ang.util.alterSniCase
+import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStreamReader
 import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -20,6 +23,21 @@ import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+
+/** Probe timeouts, shared by the TLS and WebSocket probes. */
+private const val PROBE_CONNECT_TIMEOUT_MS = 5000
+private const val PROBE_HANDSHAKE_TIMEOUT_MS = 5000
+
+private fun trustAllContext(): SSLContext {
+    val trustAll = object : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+    }
+    return SSLContext.getInstance("TLS").apply {
+        init(null, arrayOf<TrustManager>(trustAll), SecureRandom())
+    }
+}
 
 /**
  * TCP, SNI and TLS probes for one server, run after the DNS stage.
@@ -51,8 +69,6 @@ import javax.net.ssl.X509TrustManager
 object TlsProbe {
 
     const val HARMLESS_SNI = "example.com"
-    private const val CONNECT_TIMEOUT_MS = 5000
-    private const val HANDSHAKE_TIMEOUT_MS = 5000
 
     suspend fun probeConnection(
         ip: String,
@@ -89,7 +105,7 @@ object TlsProbe {
         try {
             Socket().use { socket ->
                 val start = SystemClock.elapsedRealtime()
-                socket.connect(InetSocketAddress(ip, port), CONNECT_TIMEOUT_MS)
+                socket.connect(InetSocketAddress(ip, port), PROBE_CONNECT_TIMEOUT_MS)
                 TcpProbeResult(ip, port, TcpOutcome.CONNECTED, SystemClock.elapsedRealtime() - start)
             }
         } catch (e: Exception) {
@@ -107,8 +123,8 @@ object TlsProbe {
         val start = SystemClock.elapsedRealtime()
         val plain = Socket()
         try {
-            plain.connect(InetSocketAddress(ip, port), CONNECT_TIMEOUT_MS)
-            plain.soTimeout = HANDSHAKE_TIMEOUT_MS
+            plain.connect(InetSocketAddress(ip, port), PROBE_CONNECT_TIMEOUT_MS)
+            plain.soTimeout = PROBE_HANDSHAKE_TIMEOUT_MS
             val ssl = trustAllContext().socketFactory.createSocket(plain, ip, port, true) as SSLSocket
             ssl.use {
                 val params = it.sslParameters
@@ -159,16 +175,155 @@ object TlsProbe {
         }
     }
 
-    private fun trustAllContext(): SSLContext {
-        val trustAll = object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-        }
-        return SSLContext.getInstance("TLS").apply {
-            init(null, arrayOf<TrustManager>(trustAll), SecureRandom())
+}
+
+/**
+ * WebSocket transport probe, run after the TLS stage for WS profiles.
+ *
+ * It re-opens the connection the TLS probe already proved — a plain
+ * [Socket] to the trusted IP, a TLS handshake with the profile's
+ * effective SNI (mixed-case when the fix is on) and ALPN http/1.1 —
+ * then sends a plain WebSocket Upgrade request (the profile's path and
+ * Host) and reads the HTTP status line. A 101 means the server
+ * accepted the upgrade: the transport works. Any other HTTP status
+ * means the server answered but refused the upgrade: the path is open,
+ * so the transport is not blocked by DPI, but the probe's upgrade
+ * differs from Xray's (headers) — the core test decides whether the
+ * config connects. A timeout, reset or network failure means the
+ * upgrade never reached the server: the transport is blocked.
+ *
+ * Honest limits: like the TLS probe it uses the phone's TLS stack, so
+ * it cannot reproduce the profile's fingerprint; and it only sends the
+ * Upgrade, never the VLESS payload, so it proves the transport, not
+ * the whole connection. It runs only when the real-SNI handshake
+ * completed — if TLS already failed, the TLS stage explains it and
+ * the upgrade cannot run. TCP profiles (including REALITY) have no
+ * Upgrade to test: the TCP probe already covers their transport.
+ */
+object WsProbe {
+
+    suspend fun probeWebSocket(
+        ip: String,
+        port: Int,
+        sni: String?,
+        host: String,
+        path: String,
+    ): WsProbeResult = withContext(Dispatchers.IO) {
+        val requestPath = if (path.startsWith("/")) path else "/$path"
+        val start = SystemClock.elapsedRealtime()
+        val plain = Socket()
+        try {
+            plain.connect(InetSocketAddress(ip, port), PROBE_CONNECT_TIMEOUT_MS)
+            plain.soTimeout = PROBE_HANDSHAKE_TIMEOUT_MS
+            val ssl = trustAllContext().socketFactory.createSocket(plain, ip, port, true) as SSLSocket
+            ssl.use {
+                val params = it.sslParameters
+                params.serverNames = if (sni != null) listOf(SNIHostName(sni)) else emptyList()
+                // A WebSocket Upgrade is an HTTP/1.1 request: force that
+                // ALPN even if the profile lists another one.
+                params.applicationProtocols = arrayOf("http/1.1")
+                it.sslParameters = params
+                it.startHandshake()
+                val keyBytes = ByteArray(16).also { bytes -> SecureRandom().nextBytes(bytes) }
+                val key = Base64.encodeToString(keyBytes, Base64.NO_WRAP)
+                val out = it.outputStream.bufferedWriter(Charsets.US_ASCII)
+                out.write("GET $requestPath HTTP/1.1\r\n")
+                out.write("Host: $host\r\n")
+                out.write("Upgrade: websocket\r\n")
+                out.write("Connection: Upgrade\r\n")
+                out.write("Sec-WebSocket-Key: $key\r\n")
+                out.write("Sec-WebSocket-Version: 13\r\n")
+                out.write("\r\n")
+                out.flush()
+                val reader = BufferedReader(InputStreamReader(it.inputStream, Charsets.US_ASCII))
+                val status = parseHttpStatus(reader.readLine())
+                val latency = SystemClock.elapsedRealtime() - start
+                WsProbeResult(
+                    path = requestPath,
+                    outcome = when {
+                        status == null -> WsOutcome.NETWORK
+                        status == 101 -> WsOutcome.UPGRADED
+                        else -> WsOutcome.HTTP_ERROR
+                    },
+                    httpStatus = status,
+                    latencyMs = latency,
+                )
+            }
+        } catch (e: Exception) {
+            try {
+                plain.close()
+            } catch (_: Exception) {
+            }
+            WsProbeResult(
+                path = requestPath,
+                outcome = classifyWsException(e),
+                httpStatus = null,
+                latencyMs = null,
+            )
         }
     }
+
+    private fun classifyWsException(e: Exception): WsOutcome {
+        return when {
+            e is SocketTimeoutException -> WsOutcome.TIMEOUT
+            e.message?.contains("reset", ignoreCase = true) == true -> WsOutcome.RESET
+            else -> WsOutcome.NETWORK
+        }
+    }
+}
+
+enum class WsOutcome {
+    /** The server answered 101: the upgrade — and the transport — works. */
+    UPGRADED,
+
+    /** The server answered with another HTTP status: the path is open,
+     *  the upgrade was refused. */
+    HTTP_ERROR,
+    TIMEOUT,
+    RESET,
+    NETWORK,
+}
+
+data class WsProbeResult(
+    val path: String,
+    val outcome: WsOutcome,
+    val httpStatus: Int?,
+    val latencyMs: Long?,
+)
+
+enum class WsVerdictKind {
+    OK,
+
+    /** The server answered but refused the upgrade: transport open,
+     *  upgrade refused. */
+    REACHED,
+    BLOCKED,
+    SKIPPED,
+}
+
+/** Pure decision for the WS verdict; covered by unit tests. */
+fun evaluateWsVerdict(result: WsProbeResult?): WsVerdictKind {
+    return when (result?.outcome) {
+        null -> WsVerdictKind.SKIPPED
+        WsOutcome.UPGRADED -> WsVerdictKind.OK
+        WsOutcome.HTTP_ERROR -> WsVerdictKind.REACHED
+        WsOutcome.TIMEOUT, WsOutcome.RESET, WsOutcome.NETWORK -> WsVerdictKind.BLOCKED
+    }
+}
+
+/** Parse an HTTP status line such as "HTTP/1.1 101 Switching Protocols".
+ *  Returns null for a missing or malformed line. Pure logic, covered by
+ *  unit tests. */
+fun parseHttpStatus(statusLine: String?): Int? {
+    val parts = statusLine?.trim()?.split(" ") ?: return null
+    if (parts.size < 2) return null
+    return parts[1].toIntOrNull()?.takeIf { it in 100..599 }
+}
+
+/** Pure decision: only the WS network has an Upgrade to probe. TCP
+ *  profiles (including REALITY) are covered by the TCP probe. */
+fun isWsTransport(network: String?): Boolean {
+    return "ws".equals(network, ignoreCase = true)
 }
 
 enum class TcpOutcome {
@@ -224,6 +379,8 @@ data class ConnectionProbeResult(
     val tls: List<TlsProbeResult>,
     val sniVerdict: SniVerdictKind,
     val tlsSkipped: TlsSkippedReason? = null,
+    val ws: WsProbeResult? = null,
+    val wsVerdict: WsVerdictKind? = null,
 )
 
 enum class SniVerdictKind {
@@ -341,6 +498,12 @@ fun shouldOfferSniFix(
  *  network failure before any ServerHello does not. */
 fun reachedServer(result: TlsProbeResult): Boolean {
     return result.outcome == TlsOutcome.HANDSHAKE_OK || result.outcome == TlsOutcome.HANDSHAKE_FAILED
+}
+
+/** A 101, or any other HTTP status, proves the server answered the
+ *  upgrade request. A timeout, reset or network failure does not. */
+fun wsReachedServer(result: WsProbeResult): Boolean {
+    return result.outcome == WsOutcome.UPGRADED || result.outcome == WsOutcome.HTTP_ERROR
 }
 
 /**

@@ -527,6 +527,48 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
         )
         SniVerdictKind.SKIPPED, null -> Unit
     }
+    // WebSocket transport probe: only present for WS profiles whose
+    // real-SNI handshake completed.
+    state.ws?.let { ws ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (wsReachedServer(ws)) "✓" else "✕",
+                color = if (wsReachedServer(ws)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "WebSocket ${ws.path}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(text = wsOutcomeText(ws), style = MaterialTheme.typography.bodySmall)
+            }
+            ws.latencyMs?.let { latency ->
+                Text(text = "$latency ms", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        when (state.wsVerdict) {
+            WsVerdictKind.OK -> Text(
+                text = stringResource(R.string.conn_diagnose_ws_ok),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            WsVerdictKind.REACHED -> Text(
+                text = stringResource(R.string.conn_diagnose_ws_reached, ws.httpStatus ?: 0),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            WsVerdictKind.BLOCKED -> Text(
+                text = stringResource(R.string.conn_diagnose_ws_blocked),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            WsVerdictKind.SKIPPED, null -> Unit
+        }
+    }
     if (state.tls.isNotEmpty()) {
         Text(
             text = stringResource(R.string.conn_diagnose_fingerprint_note),
@@ -555,6 +597,17 @@ private fun tcpOutcomeText(outcome: TcpOutcome): String {
         TcpOutcome.REFUSED -> stringResource(R.string.conn_diagnose_tcp_refused)
         TcpOutcome.RESET -> stringResource(R.string.conn_diagnose_tcp_reset)
         TcpOutcome.NETWORK -> stringResource(R.string.dns_diagnose_error_network)
+    }
+}
+
+@Composable
+private fun wsOutcomeText(result: WsProbeResult): String {
+    return when (result.outcome) {
+        WsOutcome.UPGRADED -> stringResource(R.string.conn_diagnose_ws_upgraded)
+        WsOutcome.HTTP_ERROR -> "HTTP ${result.httpStatus ?: 0}"
+        WsOutcome.TIMEOUT -> stringResource(R.string.dns_diagnose_error_timeout)
+        WsOutcome.RESET -> stringResource(R.string.conn_diagnose_tcp_reset)
+        WsOutcome.NETWORK -> stringResource(R.string.dns_diagnose_error_network)
     }
 }
 

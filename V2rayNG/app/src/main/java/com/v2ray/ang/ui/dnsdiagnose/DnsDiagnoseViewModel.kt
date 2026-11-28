@@ -82,7 +82,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
         probeJob?.cancel()
         probeJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
-                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null, sniFixOffered = false, tlsSkipped = null)
+                it.copy(probing = true, rows = emptyList(), verdict = null, tcp = null, tls = emptyList(), sniVerdict = null, sniFixOffered = false, tlsSkipped = null, ws = null, wsVerdict = null)
             }
             var results = DnsProbe.probeDomain(domain, app)
             var evaluation = evaluateVerdict(results)
@@ -107,6 +107,8 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     tls = connection?.tls.orEmpty(),
                     sniVerdict = connection?.sniVerdict,
                     tlsSkipped = connection?.tlsSkipped,
+                    ws = connection?.ws,
+                    wsVerdict = connection?.wsVerdict,
                     sniFixOffered = shouldOfferSniFix(connection?.sniVerdict, caseSni, storedSni),
                 )
             }
@@ -244,7 +246,22 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 // Skip the case-variant handshake when the fix is on:
                 // it would only re-test the stored SNI, which is the
                 // form already known to be blocked.
-                TlsProbe.probeConnection(ip, port, realSni, alpn, includeCaseVariant = !profile.sniCaseMixed)
+                val connection = TlsProbe.probeConnection(ip, port, realSni, alpn, includeCaseVariant = !profile.sniCaseMixed)
+                // WebSocket transport probe: only for WS profiles, and
+                // only when the real-SNI handshake completed — otherwise
+                // the TLS stage already explains the failure and the
+                // upgrade cannot run. The WS Host/path come from the
+                // profile, falling back to the domain and "/" when blank.
+                val ws = if (isWsTransport(profile.network) &&
+                    connection.tls.firstOrNull { it.variant == TlsProbeVariant.REAL_SNI }?.outcome == TlsOutcome.HANDSHAKE_OK
+                ) {
+                    val wsHost = profile.host?.trim().takeIf { it.isNotEmpty() } ?: domain
+                    val wsPath = profile.path?.trim().takeIf { it.isNotEmpty() } ?: "/"
+                    WsProbe.probeWebSocket(ip, port, realSni, wsHost, wsPath)
+                } else {
+                    null
+                }
+                connection.copy(ws = ws, wsVerdict = evaluateWsVerdict(ws))
             }
             TlsProbeMode.REALITY -> {
                 val tcp = TlsProbe.probeTcp(ip, port)
