@@ -411,13 +411,6 @@ private fun CoreTestSection(state: DnsDiagnoseUiState, onAction: (DnsDiagnoseAct
     ) {
         Text(text = stringResource(R.string.core_test_action))
     }
-    if (state.flagOn) {
-        Text(
-            text = stringResource(R.string.core_test_no_doh_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable

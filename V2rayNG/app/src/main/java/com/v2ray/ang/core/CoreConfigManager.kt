@@ -450,11 +450,43 @@ object CoreConfigManager {
         v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "warning"
         v2rayConfig.inbounds.clear()
         v2rayConfig.routing.rules.clear()
-        v2rayConfig.dns = null
+        // The core test runs the real connection, so it must exercise the
+        // direct-DoH fix too: without the tagged entries the test resolves
+        // the (filtered) domain through the poisoned system resolver and
+        // can never succeed. Only those entries survive — the rest of the
+        // DNS section is stripped as before — and their queries are routed
+        // direct, since with routing cleared there is no rule for them and
+        // the default would send them through the proxy they exist to reach.
+        val keptDns = directDohOnlyDns(v2rayConfig.dns)
+        v2rayConfig.dns = keptDns
+        if (keptDns != null) {
+            v2rayConfig.routing.rules.add(
+                V2rayConfig.RoutingBean.RulesBean(
+                    outboundTag = AppConfig.TAG_DIRECT,
+                    inboundTag = arrayListOf(AppConfig.TAG_DIRECT_DOH),
+                    domain = null
+                )
+            )
+        }
         v2rayConfig.fakedns = null
         v2rayConfig.stats = null
         v2rayConfig.policy = null
         v2rayConfig.outbounds.forEach { key -> key.mux = null }
+    }
+
+    /**
+     * The DNS section the speed-test config keeps: only the direct-DoH
+     * entries (tag [AppConfig.TAG_DIRECT_DOH]), in their written order —
+     * so the probe-winning endpoint stays first. Null when the config has
+     * no direct-DoH entries, in which case the speed-test config keeps no
+     * DNS section at all, as before.
+     */
+    internal fun directDohOnlyDns(dns: V2rayConfig.DnsBean?): V2rayConfig.DnsBean? {
+        val kept = dns?.servers
+            ?.filter { (it as? V2rayConfig.DnsBean.ServersBean)?.tag == AppConfig.TAG_DIRECT_DOH }
+            .orEmpty()
+        if (kept.isEmpty()) return null
+        return V2rayConfig.DnsBean(servers = ArrayList(kept), tag = AppConfig.TAG_DNS)
     }
 
     /**
