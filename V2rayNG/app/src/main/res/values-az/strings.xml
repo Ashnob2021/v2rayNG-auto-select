@@ -610,7 +610,7 @@
     <string name="conn_diagnose_sni_ok">SNI is not blocked — the handshake with the real SNI reaches the server.</string>
     <string name="conn_diagnose_tls_blocked">TLS is blocked — no handshake reaches the server with any SNI.</string>
     <string name="conn_diagnose_sni_inconclusive">The probe could not complete a handshake — every handshake failed with a network error, so this does not prove TLS is blocked.</string>
-    <string name="conn_diagnose_sni_no_alpn_note">This profile has no ALPN, so the probe sent a ClientHello without ALPN — while the real connection sends the fingerprint's ALPN. A failed handshake here may not mean TLS is blocked. Try setting an ALPN such as http/1.1 on the profile.</string>
+    <string name="conn_diagnose_sni_no_alpn_note">This profile has no ALPN, so the probe sent a ClientHello without ALPN — while the real connection sends an ALPN from its fingerprint. A failed handshake here may not mean TLS is blocked. Try setting an ALPN such as http/1.1 on the profile.</string>
     <string name="conn_diagnose_sni_case">SNI with different case (%1$s)</string>
     <string name="conn_diagnose_sni_case_sensitive">SNI filtering is case-sensitive — the real SNI is blocked, but the same SNI with different letter case reaches the server.</string>
     <string name="conn_diagnose_sni_case_sensitive_fixed">SNI filtering is case-sensitive — the two letter-case forms behave differently. The mixed-case SNI fix is on, so the connection sends the mixed-case SNI; the core test below is the proof.</string>
