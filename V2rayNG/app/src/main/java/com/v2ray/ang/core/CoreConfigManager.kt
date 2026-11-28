@@ -58,7 +58,7 @@ object CoreConfigManager {
      *
      * The core flow is reused, then non-essential sections are removed.
      */
-    fun getV2rayConfig4Speedtest(context: Context, guid: String): ConfigResult {
+    fun getV2rayConfig4Speedtest(context: Context, guid: String, probeIp: String? = null): ConfigResult {
         try {
             val configContext = CoreConfigContextBuilder.build(context, guid)
                 ?: return ConfigResult(
@@ -70,7 +70,7 @@ object CoreConfigManager {
                 return buildV2rayCustomConfig(configContext)
             }
             val v2rayConfig = buildUnifiedConfig(configContext)
-            postProcessForSpeedtest(v2rayConfig)
+            postProcessForSpeedtest(v2rayConfig, probeIp)
 
             return toConfigResult(configContext, v2rayConfig)
         } catch (e: Exception) {
@@ -446,27 +446,29 @@ object CoreConfigManager {
     /**
      * Trim runtime sections that are not needed for latency testing.
      */
-    private fun postProcessForSpeedtest(v2rayConfig: V2rayConfig) {
+    private fun postProcessForSpeedtest(v2rayConfig: V2rayConfig, probeIp: String? = null) {
         v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "warning"
         v2rayConfig.inbounds.clear()
         v2rayConfig.routing.rules.clear()
-        // The core test runs the real connection, so it must exercise the
-        // direct-DoH fix too: without the tagged entries the test resolves
-        // the (filtered) domain through the poisoned system resolver and
-        // can never succeed. Only those entries survive — the rest of the
-        // DNS section is stripped as before — and their queries are routed
-        // direct, since with routing cleared there is no rule for them and
-        // the default would send them through the proxy they exist to reach.
-        val keptDns = directDohOnlyDns(v2rayConfig.dns)
-        v2rayConfig.dns = keptDns
-        if (keptDns != null) {
-            v2rayConfig.routing.rules.add(
-                V2rayConfig.RoutingBean.RulesBean(
-                    outboundTag = AppConfig.TAG_DIRECT,
-                    inboundTag = arrayListOf(AppConfig.TAG_DIRECT_DOH),
-                    domain = null
-                )
-            )
+        // The delay measurement runs in a shared core instance that only
+        // ever takes the configuration's outbounds (AndroidLibXrayLite
+        // libv2ray_delay.go: acquireDelayInstance copies only the
+        // proxyman/dispatcher/log apps, and measureOutboundDelay adds only
+        // the outbounds): the DNS section of this config is never loaded,
+        // so keeping the direct-DoH entries here cannot make the test
+        // exercise the fix — the outbound's server domain would resolve
+        // through the (poisoned) system resolver instead. The DNS section
+        // is therefore stripped as before, and the fix is exercised the
+        // only way the measurement can see it: when the caller passes the
+        // DoH-trusted IP the diagnose probe already found, the proxy
+        // outbound's server address is rewritten to that IP, so the
+        // measurement dials it directly. The SNI, WS Host and REALITY
+        // serverName are separate fields and stay untouched, so the
+        // handshake is the same as the real connection's.
+        val directDohDomains = directDohDomainsOf(v2rayConfig.dns)
+        v2rayConfig.dns = null
+        if (probeIp != null && directDohDomains.isNotEmpty()) {
+            rewriteOutboundAddressesToProbeIp(v2rayConfig.getAllProxyOutbound(), probeIp, directDohDomains)
         }
         v2rayConfig.fakedns = null
         v2rayConfig.stats = null
@@ -475,18 +477,44 @@ object CoreConfigManager {
     }
 
     /**
-     * The DNS section the speed-test config keeps: only the direct-DoH
-     * entries (tag [AppConfig.TAG_DIRECT_DOH]), in their written order —
-     * so the probe-winning endpoint stays first. Null when the config has
-     * no direct-DoH entries, in which case the speed-test config keeps no
-     * DNS section at all, as before.
+     * The domains the direct-DoH entries of a DNS section serve,
+     * lowercased and without the "full:" prefix. Empty when the section
+     * has no such entries, i.e. when the direct-DoH fix is not on.
+     * Pure logic, covered by unit tests.
      */
-    internal fun directDohOnlyDns(dns: V2rayConfig.DnsBean?): V2rayConfig.DnsBean? {
-        val kept = dns?.servers
-            ?.filter { (it as? V2rayConfig.DnsBean.ServersBean)?.tag == AppConfig.TAG_DIRECT_DOH }
-            .orEmpty()
-        if (kept.isEmpty()) return null
-        return V2rayConfig.DnsBean(servers = ArrayList(kept), tag = AppConfig.TAG_DNS)
+    internal fun directDohDomainsOf(dns: V2rayConfig.DnsBean?): Set<String> {
+        return dns?.servers.orEmpty()
+            .mapNotNull { it as? V2rayConfig.DnsBean.ServersBean }
+            .filter { it.tag == AppConfig.TAG_DIRECT_DOH }
+            .flatMap { it.domains.orEmpty() }
+            .map { it.removePrefix("full:").lowercase() }
+            .toSet()
+    }
+
+    /**
+     * Rewrite the server address of every proxy outbound whose address is
+     * one of [directDohDomains] to [probeIp], so the delay measurement —
+     * which never loads the config's DNS section — dials the DoH-trusted
+     * IP directly instead of resolving the (possibly filtered) domain
+     * through the system resolver. WireGuard endpoints are left alone:
+     * their address lives in the peer endpoint, not in settings. The
+     * decision of which outbounds change is pure logic, covered by unit
+     * tests; the outbound settings are mutated in place.
+     */
+    internal fun rewriteOutboundAddressesToProbeIp(
+        outbounds: List<V2rayConfig.OutboundBean>,
+        probeIp: String,
+        directDohDomains: Set<String>,
+    ) {
+        outbounds.forEach { outbound ->
+            val address = outbound.getServerAddress()
+            if (address != null &&
+                !outbound.protocol.equals(EConfigType.WIREGUARD.name, ignoreCase = true) &&
+                directDohDomains.contains(address.lowercase())
+            ) {
+                outbound.settings?.address = probeIp
+            }
+        }
     }
 
     /**

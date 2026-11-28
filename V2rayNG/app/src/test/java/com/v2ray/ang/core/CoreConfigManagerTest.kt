@@ -96,33 +96,63 @@ class CoreConfigManagerTest {
     )
 
     @Test
-    fun `speedtest dns keeps only direct doh entries in written order`() {
-        val kept = CoreConfigManager.directDohOnlyDns(
-            dnsWith(
-                dohServer("https://208.67.222.222/dns-query"),
-                V2rayConfig.DnsBean.ServersBean(address = "223.5.5.5", domains = listOf("geosite:cn")),
-                "https://cloudflare-dns.com/dns-query",
-                dohServer("https://1.1.1.1/dns-query"),
-            )
-        )
+    fun `direct doh domains are the full domains lowercased without the prefix`() {
         assertEquals(
-            listOf("https://208.67.222.222/dns-query", "https://1.1.1.1/dns-query"),
-            kept!!.servers!!.map { (it as V2rayConfig.DnsBean.ServersBean).address }
-        )
-        assertEquals(AppConfig.TAG_DNS, kept.tag)
-        assertNull(kept.hosts)
-    }
-
-    @Test
-    fun `speedtest dns is null without direct doh entries`() {
-        assertNull(
-            CoreConfigManager.directDohOnlyDns(
+            setOf("nlp.dandev.de5.net"),
+            CoreConfigManager.directDohDomainsOf(
                 dnsWith(
+                    dohServer("https://208.67.222.222/dns-query"),
                     V2rayConfig.DnsBean.ServersBean(address = "223.5.5.5", domains = listOf("geosite:cn")),
-                    "https://cloudflare-dns.com/dns-query",
+                    dohServer("https://1.1.1.1/dns-query"),
                 )
             )
         )
-        assertNull(CoreConfigManager.directDohOnlyDns(null))
+        assertEquals(
+            emptySet<String>(),
+            CoreConfigManager.directDohDomainsOf(
+                dnsWith(
+                    V2rayConfig.DnsBean.ServersBean(address = "223.5.5.5", domains = listOf("geosite:cn")),
+                )
+            )
+        )
+        assertEquals(emptySet<String>(), CoreConfigManager.directDohDomainsOf(null))
+    }
+
+    private fun proxyOutbound(protocol: String, address: String) = V2rayConfig.OutboundBean(
+        protocol = protocol,
+        settings = V2rayConfig.OutboundBean.OutSettingsBean(address = address, port = 15304),
+    )
+
+    @Test
+    fun `outbound address is rewritten to the probe ip only for direct doh domains`() {
+        val domains = setOf("nlp.dandev.de5.net")
+        val matching = proxyOutbound("vless", "nlp.dandev.de5.net")
+        val otherDomain = proxyOutbound("trojan", "www.speedtest.net")
+        val ipAddress = proxyOutbound("vless", "1.2.3.4")
+        val upperCase = proxyOutbound("vless", "NLP.DANDEV.DE5.NET")
+        val wireguard = proxyOutbound("wireguard", "nlp.dandev.de5.net")
+        CoreConfigManager.rewriteOutboundAddressesToProbeIp(
+            listOf(matching, otherDomain, ipAddress, upperCase, wireguard),
+            "91.198.77.180",
+            domains,
+        )
+        assertEquals("91.198.77.180", matching.getServerAddress())
+        assertEquals("www.speedtest.net", otherDomain.getServerAddress())
+        assertEquals("1.2.3.4", ipAddress.getServerAddress())
+        assertEquals("91.198.77.180", upperCase.getServerAddress())
+        // WireGuard keeps its address: it lives in the peer endpoint,
+        // not in settings.
+        assertEquals("nlp.dandev.de5.net", wireguard.settings?.address)
+    }
+
+    @Test
+    fun `no outbound is rewritten without direct doh domains`() {
+        val outbound = proxyOutbound("vless", "nlp.dandev.de5.net")
+        CoreConfigManager.rewriteOutboundAddressesToProbeIp(
+            listOf(outbound),
+            "91.198.77.180",
+            emptySet(),
+        )
+        assertEquals("nlp.dandev.de5.net", outbound.getServerAddress())
     }
 }
