@@ -97,8 +97,8 @@ object TlsProbe {
                 add(probeTls(ip, port, TlsProbeVariant.CASE_SNI, alterSniCase(realSni), alpn))
             }
         }
-        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2], tls.getOrNull(3))
-        return ConnectionProbeResult(tcp, tls, verdict)
+        val verdict = evaluateSniVerdict(tls[0], tls[1], tls[2], tls.getOrNull(3), hasAlpn = alpn.isNotEmpty())
+        return ConnectionProbeResult(tcp, tls, verdict, hasAlpn = alpn.isNotEmpty())
     }
 
     suspend fun probeTcp(ip: String, port: Int): TcpProbeResult = withContext(Dispatchers.IO) {
@@ -381,6 +381,11 @@ data class ConnectionProbeResult(
     val tlsSkipped: TlsSkippedReason? = null,
     val ws: WsProbeResult? = null,
     val wsVerdict: WsVerdictKind? = null,
+    // Whether the probe's TLS handshakes carried an ALPN: false
+    // when the profile has none. The verdict and the screen need
+    // it — a failed handshake without an ALPN may be the missing
+    // ALPN, not the SNI or TLS.
+    val hasAlpn: Boolean = true,
 )
 
 enum class SniVerdictKind {
@@ -427,12 +432,22 @@ fun tlsProbeMode(security: String?): TlsProbeMode {
     }
 }
 
-/** Pure decision for [TlsProbe.probeConnection]; covered by unit tests. */
+/** Pure decision for [TlsProbe.probeConnection]; covered by unit tests.
+ * [hasAlpn] says whether the probe's handshakes carried an ALPN. A
+ * ClientHello without one does not look like a real browser, so when
+ * the handshakes fail and no ALPN was offered, the failure may be
+ * the missing ALPN rather than the SNI or TLS — the real connection
+ * sends the fingerprint's ALPN instead. So a would-be TLS_BLOCKED
+ * verdict becomes INCONCLUSIVE. A verdict the handshakes themselves
+ * prove (NOT_BLOCKED, FILTERED, CASE_SENSITIVE) is unchanged: a
+ * completing control handshake proves a no-ALPN ClientHello passes.
+ */
 fun evaluateSniVerdict(
     real: TlsProbeResult?,
     harmless: TlsProbeResult?,
     noSni: TlsProbeResult?,
     caseSni: TlsProbeResult? = null,
+    hasAlpn: Boolean = true,
 ): SniVerdictKind {
     if (real == null) return SniVerdictKind.SKIPPED
     // A completed handshake with the real SNI means the SNI is fine,
@@ -461,6 +476,10 @@ fun evaluateSniVerdict(
     ) {
         return SniVerdictKind.INCONCLUSIVE
     }
+    // Without an ALPN the probe's ClientHello carried no ALPN
+    // extension, so a failed handshake may be the missing ALPN
+    // rather than the SNI or TLS. Do not call it blocked.
+    if (!hasAlpn) return SniVerdictKind.INCONCLUSIVE
     return SniVerdictKind.TLS_BLOCKED
 }
 

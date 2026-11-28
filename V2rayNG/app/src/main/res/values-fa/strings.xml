@@ -609,6 +609,7 @@
     <string name="conn_diagnose_sni_ok">SNI بلاک نیست — هندشیک با SNI واقعی به سرور می‌رسد.</string>
     <string name="conn_diagnose_tls_blocked">TLS بلاک است — هیچ هندشیکی با هیچ SNI به سرور نمی‌رسد.</string>
     <string name="conn_diagnose_sni_inconclusive">پروب نتوانست هندشیک را کامل کند — هر سه هندشیک با خطای شبکه ناموفق بودند، پس این ثابت نمی‌کند TLS بلاک است.</string>
+    <string name="conn_diagnose_sni_no_alpn_note">این کانفیگ ALPN ندارد، پس پروب هندشیک را بدون ALPN فرستاد؛ ولی اتصال واقعی ALPN فینگرپرینت را می‌فرستد، پس شکست هندشیک اینجا لزوماً به معنی بلاک بودن TLS نیست. روی کانفیگ یک ALPN مثل http/1.1 بگذار و دوباره تست کن.</string>
     <string name="conn_diagnose_sni_case">SNI با حروف متفاوت (%1$s)</string>
     <string name="conn_diagnose_sni_case_sensitive">فیلترینگ SNI به بزرگی و کوچکی حروف حساس است — SNI واقعی بلاک است، ولی همان SNI با حروف متفاوت به سرور می‌رسد.</string>
     <string name="conn_diagnose_sni_case_sensitive_fixed">فیلترینگ SNI به بزرگی و کوچکی حروف حساس است — دو شکل حروف رفتار متفاوتی دارند. اصلاح SNI با حروف متفاوت فعال است، پس اتصال SNI را با حروف متفاوت می‌فرستد؛ تست هسته پایین‌تر مدرک نهایی است.</string>

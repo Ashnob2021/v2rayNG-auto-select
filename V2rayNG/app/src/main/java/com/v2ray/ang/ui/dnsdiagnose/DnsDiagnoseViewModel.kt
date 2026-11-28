@@ -106,6 +106,7 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                     tcp = connection?.tcp,
                     tls = connection?.tls.orEmpty(),
                     sniVerdict = connection?.sniVerdict,
+                    hasAlpn = connection?.hasAlpn ?: true,
                     tlsSkipped = connection?.tlsSkipped,
                     ws = connection?.ws,
                     wsVerdict = connection?.wsVerdict,

@@ -534,6 +534,17 @@ private fun ConnectionSection(state: DnsDiagnoseUiState) {
         )
         SniVerdictKind.SKIPPED, null -> Unit
     }
+    // Without an ALPN the probe's ClientHello carried none, while
+    // the real connection sends the fingerprint's ALPN — so when
+    // the verdict is inconclusive, say so instead of letting the
+    // user read it as "TLS is blocked".
+    if (!state.hasAlpn && state.sniVerdict == SniVerdictKind.INCONCLUSIVE) {
+        Text(
+            text = stringResource(R.string.conn_diagnose_sni_no_alpn_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     // WebSocket transport probe: only present for WS profiles whose
     // real-SNI handshake completed.
     state.ws?.let { ws ->

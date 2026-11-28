@@ -22,6 +22,10 @@ data class DnsDiagnoseUiState(
     val tls: List<TlsProbeResult> = emptyList(),
     val sniVerdict: SniVerdictKind? = null,
     val sniFixOffered: Boolean = false,
+    // Whether the probe's TLS handshakes carried an ALPN (false
+    // when the profile has none). The screen needs it to explain
+    // an inconclusive SNI verdict honestly.
+    val hasAlpn: Boolean = true,
     val tlsSkipped: TlsSkippedReason? = null,
     val ws: WsProbeResult? = null,
     val wsVerdict: WsVerdictKind? = null,

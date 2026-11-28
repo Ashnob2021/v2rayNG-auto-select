@@ -174,6 +174,80 @@ class TlsProbeTest {
     }
 
     @Test
+    fun `tls blocked with an alpn stays tls blocked`() {
+        // Same shape as above, with the ALPN made explicit: the
+        // handshakes carried an ALPN, so the failure is the TLS
+        // layer, not the missing ALPN.
+        assertEquals(
+            SniVerdictKind.TLS_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                hasAlpn = true,
+            )
+        )
+    }
+
+    @Test
+    fun `tls blocked without an alpn is inconclusive`() {
+        // The 04:24 device run: every handshake failed, but the
+        // profile had no ALPN, so the probe's ClientHello carried
+        // none — the failure may be the missing ALPN, not TLS.
+        assertEquals(
+            SniVerdictKind.INCONCLUSIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.NETWORK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                hasAlpn = false,
+            )
+        )
+    }
+
+    @Test
+    fun `sni filtered without an alpn stays filtered`() {
+        // A completing harmless handshake proves a no-ALPN
+        // ClientHello passes, so the real SNI is the problem.
+        assertEquals(
+            SniVerdictKind.FILTERED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.RESET),
+                hasAlpn = false,
+            )
+        )
+    }
+
+    @Test
+    fun `case sensitive without an alpn stays case sensitive`() {
+        assertEquals(
+            SniVerdictKind.CASE_SENSITIVE,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_FAILED),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.CASE_SNI, TlsOutcome.HANDSHAKE_OK),
+                hasAlpn = false,
+            )
+        )
+    }
+
+    @Test
+    fun `real sni handshake ok without an alpn still means not blocked`() {
+        assertEquals(
+            SniVerdictKind.NOT_BLOCKED,
+            evaluateSniVerdict(
+                tls(TlsProbeVariant.REAL_SNI, TlsOutcome.HANDSHAKE_OK),
+                tls(TlsProbeVariant.HARMLESS_SNI, TlsOutcome.TIMEOUT),
+                tls(TlsProbeVariant.NO_SNI, TlsOutcome.TIMEOUT),
+                hasAlpn = false,
+            )
+        )
+    }
+
+    @Test
     fun `case variant reaching while real sni fails means case sensitive filtering`() {
         assertEquals(
             SniVerdictKind.CASE_SENSITIVE,
