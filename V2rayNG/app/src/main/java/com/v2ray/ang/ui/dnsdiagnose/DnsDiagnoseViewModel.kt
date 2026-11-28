@@ -255,8 +255,8 @@ class DnsDiagnoseViewModel(application: Application) : BaseViewModel(application
                 val ws = if (isWsTransport(profile.network) &&
                     connection.tls.firstOrNull { it.variant == TlsProbeVariant.REAL_SNI }?.outcome == TlsOutcome.HANDSHAKE_OK
                 ) {
-                    val wsHost = profile.host?.trim().takeIf { it.isNotEmpty() } ?: domain
-                    val wsPath = profile.path?.trim().takeIf { it.isNotEmpty() } ?: "/"
+                    val wsHost = profile.host?.trim()?.takeIf { it.isNotEmpty() } ?: domain
+                    val wsPath = profile.path?.trim()?.takeIf { it.isNotEmpty() } ?: "/"
                     WsProbe.probeWebSocket(ip, port, realSni, wsHost, wsPath)
                 } else {
                     null
